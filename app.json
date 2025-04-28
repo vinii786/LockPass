@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "lockpass",
+    "slug": "lockpass",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/LockPassIcon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/LockPassIcon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/LockPassIcon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.vinii786.lockpass"
+    },
+    "web": {
+      "favicon": "./assets/LockPassIcon.png"
+    },
+    "plugins": ["expo-font"],
+    "extra": {
+      "eas": {
+        "projectId": "39a6379d-efd4-4d15-8fe3-58709c9f7877"
+      }
+    }
+  }
+}
