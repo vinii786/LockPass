@@ -26,6 +26,10 @@
       "favicon": "./assets/LockPassIcon.png"
     },
     "plugins": ["expo-font"],
+    "assetBundlePatterns": ["**/*"],
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "extra": {
       "eas": {
         "projectId": "39a6379d-efd4-4d15-8fe3-58709c9f7877"

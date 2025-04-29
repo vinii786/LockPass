@@ -10,6 +10,7 @@ export default function App() {
   });
 
   useEffect(() => {
+    // Definindo a fonte padrão apenas quando as fontes estiverem carregadas
     if (fontsLoaded) {
       if (Text.defaultProps == null) Text.defaultProps = {};
       Text.defaultProps.style = { fontFamily: "Fonte-Regular" };
@@ -17,6 +18,7 @@ export default function App() {
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
+    // Retornar um loading enquanto as fontes não são carregadas
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#000" />
@@ -24,5 +26,6 @@ export default function App() {
     );
   }
 
+  // Se as fontes não estiverem carregadas, o app funciona normalmente, mas sem a fonte customizada.
   return <AppNavigator />;
 }
