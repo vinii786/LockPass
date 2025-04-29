@@ -1,9 +1,10 @@
+// AppNavigator.js
+import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-
 import LoginScreen from "../Pages/Login";
-import Home from "../Pages/Home";
 import Cadastro from "../Pages/Cadastro";
+import DrawerRoutes from "./DrawerRoutes";
 
 const Stack = createNativeStackNavigator();
 
@@ -18,8 +19,8 @@ export default function AppNavigator() {
         />
 
         <Stack.Screen
-          name="Home"
-          component={Home}
+          name="DrawerRoutes"
+          component={DrawerRoutes}
           options={{ headerShown: false }}
         />
 

@@ -41,8 +41,7 @@ export default function Login({ navigation }) {
           userEmail: response.data.userEmail,
         };
 
-        // Passa os dados do usuário para a tela Home
-        navigation.navigate("Home", { user: userData });
+        navigation.navigate("DrawerRoutes", { user: userData });
       } else {
         setErro("Erro ao tentar fazer login");
       }
