@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import axios from "axios";
-import { useNavigation } from "@react-navigation/native"; // Importando o hook de navegação
+import { useNavigation } from "@react-navigation/native";
 
 export default function Cadastro() {
   const [nome, setNome] = useState("");
@@ -21,7 +21,7 @@ export default function Cadastro() {
   const [carregando, setCarregando] = useState(false);
   const [dados, setDados] = useState(null);
 
-  const navigation = useNavigation(); // Hook para navegação
+  const navigation = useNavigation();
 
   const handleCadastro = async () => {
     setErro("");
@@ -56,8 +56,7 @@ export default function Cadastro() {
         setDados(response.data);
         alert("Cadastro realizado com sucesso!");
 
-        // Navegar para a tela de Login após o cadastro
-        navigation.replace("Login"); // Substituir "Login" pelo nome da sua tela de login
+        navigation.replace("Login");
       } else {
         setErro("Erro ao realizar cadastro.");
       }

@@ -55,7 +55,7 @@ export default function DrawerRoutes({ route }) {
 
   return (
     <Drawer.Navigator
-      initialRouteName="Home"
+      initialRouteName="Senhas"
       drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={({ navigation }) => ({
         drawerType: "slide",
@@ -103,17 +103,17 @@ export default function DrawerRoutes({ route }) {
       })}
     >
       <Drawer.Screen
-        name="Home"
+        name="Senhas"
         component={Home}
         options={{
           drawerIcon: () => (
-            <Ionicons name="home-sharp" color="#2F2F31" size={20} />
+            <Ionicons name="lock-closed" color="#2F2F31" size={20} />
           ),
           headerTitle: "",
         }}
       />
       <Drawer.Screen
-        name="UserScreen"
+        name="Perfil"
         component={UserScreen}
         initialParams={{ user: userData }}
         options={{

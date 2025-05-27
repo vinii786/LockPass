@@ -39,6 +39,7 @@ export default function Login({ navigation }) {
           userId: response.data.userId,
           userName: response.data.userName,
           userEmail: response.data.userEmail,
+          userPassword: response.data.userPassword,
         };
 
         navigation.navigate("DrawerRoutes", { user: userData });
