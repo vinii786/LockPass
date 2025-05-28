@@ -105,6 +105,7 @@ export default function DrawerRoutes({ route }) {
       <Drawer.Screen
         name="Senhas"
         component={Home}
+        initialParams={{ user: userData }}
         options={{
           drawerIcon: () => (
             <Ionicons name="lock-closed" color="#2F2F31" size={20} />

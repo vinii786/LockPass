@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import React, { useState } from "react";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ import adicionado
 
 import Logo from "../assets/LockPassIcon.png";
 
@@ -42,6 +43,10 @@ export default function Login({ navigation }) {
           userPassword: response.data.userPassword,
         };
 
+        // ✅ Armazenar o userId localmente
+        await AsyncStorage.setItem("userID", String(response.data.userId));
+
+        // Navegar com os dados do usuário
         navigation.navigate("DrawerRoutes", { user: userData });
       } else {
         setErro("Erro ao tentar fazer login");
@@ -115,15 +120,13 @@ const styles = StyleSheet.create({
   containerLogo: {
     width: "100%",
     height: "auto",
-    marginBottom: 20,
+    marginBottom: 70,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 70,
   },
   containerLogin: {
-    justifyContent: "flex-start",
-    alignItems: "center",
     justifyContent: "center",
+    alignItems: "center",
     width: "100%",
     backgroundColor: "#2F2F31",
     paddingHorizontal: 20,
@@ -142,7 +145,6 @@ const styles = StyleSheet.create({
   input: {
     width: "100%",
     height: 50,
-    borderColor: "#ccc",
     backgroundColor: "#ffffff",
     borderRadius: 10,
     marginBottom: 15,
