@@ -15,7 +15,7 @@ import {
 import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
 
-export default function Home({ route }) {
+export default function Home({ route, navigation }) {
   const translateY = useRef(new Animated.Value(0)).current;
 
   const user = route.params?.user;
@@ -168,7 +168,15 @@ export default function Home({ route }) {
             <ActivityIndicator size="large" color="#0000ff" />
           ) : categories.length > 0 ? (
             categories.map((cat, index) => (
-              <View key={cat.id || index} style={styles.card}>
+              <TouchableOpacity
+                key={cat.id || index}
+                style={styles.card}
+                onPress={() =>
+                  navigation.navigate("CategoriaDetalhes", {
+                    categoryName: cat.categoryName,
+                  })
+                }
+              >
                 {showDeleteIcons && (
                   <TouchableOpacity
                     onPress={() => handleDeleteCategory(cat.categoryId)}
@@ -186,7 +194,7 @@ export default function Home({ route }) {
                 <View style={styles.footer}>
                   <Text style={styles.texto}>{cat.categoryName}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : (
             <Text style={{ textAlign: "center", width: "100%", marginTop: 20 }}>
@@ -221,7 +229,7 @@ export default function Home({ route }) {
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={styles.modalOverlay}
-          keyboardVerticalOffset={100} // ajuste conforme necessário
+          keyboardVerticalOffset={100}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Nova Categoria</Text>
@@ -282,20 +290,21 @@ const styles = StyleSheet.create({
   },
   card: {
     width: "48%",
-    height: 120,
+    height: 190,
     borderRadius: 20,
-    backgroundColor: "#e5e5e0",
+    backgroundColor: "#D8D8D8",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 16,
     overflow: "hidden",
     position: "relative",
+    elevation: 2,
   },
   footer: {
     position: "absolute",
     bottom: 0,
     width: "100%",
-    backgroundColor: "#d1d1cd",
+    backgroundColor: "#B9B9B9",
     paddingVertical: 6,
     alignItems: "center",
   },
