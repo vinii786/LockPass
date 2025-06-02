@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,10 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   TouchableOpacity,
+  Platform,
+  Keyboard,
+  ScrollView,
+  TouchableWithoutFeedback,
 } from "react-native";
 import axios from "axios";
 import { useNavigation } from "@react-navigation/native";
@@ -20,8 +24,29 @@ export default function Cadastro() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [dados, setDados] = useState(null);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
 
   const navigation = useNavigation();
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidHideListener.remove();
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   const handleCadastro = async () => {
     setErro("");
@@ -54,8 +79,6 @@ export default function Cadastro() {
 
       if (response.status === 201 || response.status === 200) {
         setDados(response.data);
-        alert("Cadastro realizado com sucesso!");
-
         navigation.replace("Login");
       } else {
         setErro("Erro ao realizar cadastro.");
@@ -70,7 +93,11 @@ export default function Cadastro() {
         ) {
           setErro("Email já cadastrado.");
         } else {
-          setErro("Erro ao realizar cadastro.");
+          const apiError =
+            error.response.data?.message ||
+            error.response.data?.title ||
+            "Erro ao realizar cadastro.";
+          setErro(apiError);
         }
       } else if (error.request) {
         setErro("Sem conexão com o servidor.");
@@ -81,105 +108,134 @@ export default function Cadastro() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.containerTop}>
-        <Image
-          source={require("../assets/LockPassIcon.png")}
-          style={styles.image}
-          resizeMode="contain"
-        />
-      </View>
+    <KeyboardAvoidingView
+      style={styles.kav}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          style={styles.scrollViewStyle}
+        >
+          <View
+            style={[
+              styles.container,
+              isKeyboardVisible ? styles.containerKeyboardVisible : {},
+            ]}
+          >
+            {!isKeyboardVisible && (
+              <View style={styles.containerTop}>
+                <Image
+                  source={require("../assets/LockPassIcon.png")}
+                  style={styles.image}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
 
-      <KeyboardAvoidingView style={styles.formContainer}>
-        <Text style={styles.text}>Cadastro</Text>
+            <View style={styles.formContainer}>
+              <Text style={styles.text}>Cadastro</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Nome"
-          placeholderTextColor="#aaa"
-          value={nome}
-          onChangeText={setNome}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#aaa"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Senha"
-          placeholderTextColor="#aaa"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Confirmar Senha"
-          placeholderTextColor="#aaa"
-          secureTextEntry
-          value={confirmarSenha}
-          onChangeText={setConfirmarSenha}
-        />
+              <TextInput
+                style={styles.input}
+                placeholder="Nome"
+                placeholderTextColor="#aaa"
+                value={nome}
+                onChangeText={setNome}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                placeholderTextColor="#aaa"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Senha"
+                placeholderTextColor="#aaa"
+                secureTextEntry
+                value={senha}
+                onChangeText={setSenha}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Confirmar Senha"
+                placeholderTextColor="#aaa"
+                secureTextEntry
+                value={confirmarSenha}
+                onChangeText={setConfirmarSenha}
+              />
 
-        {erro ? <Text style={styles.error}>{erro}</Text> : null}
+              {erro ? <Text style={styles.error}>{erro}</Text> : null}
 
-        {carregando ? (
-          <ActivityIndicator size="large" color="#14C234" />
-        ) : (
-          <TouchableOpacity style={styles.button} onPress={handleCadastro}>
-            <Text style={styles.buttonText}>Cadastrar</Text>
-          </TouchableOpacity>
-        )}
-
-        {dados && (
-          <View style={styles.responseContainer}>
-            <Text style={styles.responseText}>
-              {JSON.stringify(dados, null, 2)}
-            </Text>
+              {carregando ? (
+                <ActivityIndicator size="large" color="#14C234" />
+              ) : (
+                <TouchableOpacity
+                  style={styles.button}
+                  onPress={handleCadastro}
+                >
+                  <Text style={styles.buttonText}>Cadastrar</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-        )}
-      </KeyboardAvoidingView>
-    </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
-// Definição dos estilos logo após o componente
 const styles = StyleSheet.create({
+  kav: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scrollViewStyle: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
   container: {
     flex: 1,
-    justifyContent: "flex-start",
+    justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 0,
+  },
+  containerKeyboardVisible: {
+    justifyContent: "flex-start",
+    paddingTop: Platform.OS === "ios" ? 20 : 30,
   },
   image: {
     width: 100,
     height: 100,
   },
   containerTop: {
-    marginTop: 50,
-    marginBottom: 50,
+    marginBottom: 30,
     alignItems: "center",
   },
   formContainer: {
-    flex: 1,
     backgroundColor: "#2F2F31",
-    width: "100%",
+    width: "90%",
+    maxWidth: 400,
     padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 20,
     alignItems: "center",
-    justifyContent: "center",
   },
   text: {
     color: "white",
     fontFamily: "Fonte-Bold",
-    fontSize: 30,
+    fontSize: 28,
     alignSelf: "flex-start",
-    marginBottom: 20,
+    marginBottom: 25,
   },
   input: {
     width: "100%",
@@ -187,17 +243,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 8,
     marginBottom: 15,
-    paddingLeft: 10,
+    paddingLeft: 15,
     color: "black",
     fontFamily: "Fonte-Regular",
+    fontSize: 16,
   },
   button: {
     backgroundColor: "#14C234",
     alignItems: "center",
     justifyContent: "center",
-    padding: 15,
     width: "100%",
-    height: 60,
+    height: 55,
     borderRadius: 9,
     marginTop: 20,
   },
@@ -210,17 +266,6 @@ const styles = StyleSheet.create({
     color: "red",
     marginBottom: 10,
     textAlign: "center",
-    fontFamily: "Fonte-Regular",
-  },
-  responseContainer: {
-    marginTop: 20,
-    backgroundColor: "#444",
-    padding: 15,
-    borderRadius: 10,
-    width: "100%",
-  },
-  responseText: {
-    color: "white",
     fontFamily: "Fonte-Regular",
     fontSize: 14,
   },

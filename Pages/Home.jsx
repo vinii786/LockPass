@@ -151,7 +151,7 @@ export default function Home({ route, navigation }) {
         scrollEventThrottle={16}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Suas senhas</Text>
+          <Text style={styles.title}>Suas categorias</Text>
           <TouchableOpacity
             onPress={() => setShowDeleteIcons(!showDeleteIcons)}
           >
@@ -174,6 +174,8 @@ export default function Home({ route, navigation }) {
                 onPress={() =>
                   navigation.navigate("CategoriaDetalhes", {
                     categoryName: cat.categoryName,
+                    categoryId: cat.categoryId,
+                    userId: userId,
                   })
                 }
               >
@@ -310,6 +312,8 @@ const styles = StyleSheet.create({
   },
   texto: {
     fontSize: 12,
+    color: "#464646",
+    fontWeight: "bold",
   },
   addCategoryContainer: {
     position: "absolute",

@@ -7,10 +7,14 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   TouchableOpacity,
+  ScrollView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // ✅ import adicionado
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import Logo from "../assets/LockPassIcon.png";
 
@@ -19,6 +23,27 @@ export default function Login({ navigation }) {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      "keyboardDidShow",
+      () => {
+        setKeyboardVisible(true);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      "keyboardDidHide",
+      () => {
+        setKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidHideListener.remove();
+      keyboardDidShowListener.remove();
+    };
+  }, []);
 
   const handleLogin = async () => {
     setErro("");
@@ -43,17 +68,13 @@ export default function Login({ navigation }) {
           userPassword: response.data.userPassword,
         };
 
-        // ✅ Armazenar o userId localmente
         await AsyncStorage.setItem("userID", String(response.data.userId));
-
-        // Navegar com os dados do usuário
         navigation.navigate("DrawerRoutes", { user: userData });
       } else {
         setErro("Erro ao tentar fazer login");
       }
     } catch (error) {
       setCarregando(false);
-
       if (error.response) {
         setErro("Usuário ou senha incorretos.");
       } else if (error.request) {
@@ -65,74 +86,111 @@ export default function Login({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.containerLogo}>
-        <Image source={Logo} style={styles.image} resizeMode="contain" />
-      </View>
+    <KeyboardAvoidingView
+      style={styles.kav}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
+          keyboardShouldPersistTaps="handled"
+          style={styles.scrollViewStyle}
+        >
+          <View
+            style={[
+              styles.container,
+              isKeyboardVisible ? styles.containerKeyboardVisible : {},
+            ]}
+          >
+            {!isKeyboardVisible && (
+              <View style={styles.containerLogo}>
+                <Image
+                  source={Logo}
+                  style={styles.image}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
 
-      <KeyboardAvoidingView style={styles.containerLogin}>
-        <Text style={styles.title}>Login</Text>
+            <View style={styles.containerLogin}>
+              <Text style={styles.title}>Login</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          value={email}
-          onChangeText={setEmail}
-          placeholderTextColor="#aaa"
-        />
+              <TextInput
+                style={styles.input}
+                placeholder="Email"
+                value={email}
+                onChangeText={setEmail}
+                placeholderTextColor="#aaa"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Senha"
-          secureTextEntry
-          value={senha}
-          onChangeText={setSenha}
-          placeholderTextColor="#aaa"
-        />
+              <TextInput
+                style={styles.input}
+                placeholder="Senha"
+                secureTextEntry
+                value={senha}
+                onChangeText={setSenha}
+                placeholderTextColor="#aaa"
+              />
 
-        {erro ? <Text style={styles.error}>{erro}</Text> : null}
+              {erro ? <Text style={styles.error}>{erro}</Text> : null}
 
-        {carregando ? (
-          <ActivityIndicator size="large" color="#0000ff" />
-        ) : (
-          <TouchableOpacity onPress={handleLogin} style={styles.button}>
-            <Text style={styles.buttonText}>Entrar</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity onPress={() => navigation.navigate("Cadastro")}>
-          <Text style={styles.buttonText}>Cadastrar-se</Text>
-        </TouchableOpacity>
-      </KeyboardAvoidingView>
-    </View>
+              {carregando ? (
+                <ActivityIndicator size="large" color="#0000ff" />
+              ) : (
+                <TouchableOpacity onPress={handleLogin} style={styles.button}>
+                  <Text style={styles.buttonText}>Entrar</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => navigation.navigate("Cadastro")}>
+                <Text style={styles.buttonText}>Cadastrar-se</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  kav: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scrollViewStyle: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  scrollContainer: {
+    flexGrow: 1,
+  },
   container: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    flexDirection: "column",
     width: "100%",
-    padding: 0,
-    margin: 0,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 0,
+  },
+  containerKeyboardVisible: {
+    justifyContent: "flex-start",
+    paddingTop: Platform.OS === "ios" ? 20 : 40,
   },
   containerLogo: {
     width: "100%",
-    height: "auto",
-    marginBottom: 70,
-    justifyContent: "center",
     alignItems: "center",
+    marginBottom: 20,
   },
   containerLogin: {
     justifyContent: "center",
     alignItems: "center",
-    width: "100%",
+    width: "90%",
     backgroundColor: "#2F2F31",
     paddingHorizontal: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    flex: 1,
+    borderRadius: 20,
+    paddingVertical: 30,
   },
   title: {
     fontSize: 30,
@@ -171,8 +229,11 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "white",
+    fontFamily: "Fonte-Bold",
   },
   image: {
-    width: 160,
+    width: 120,
+    height: 120,
+    marginBottom: 10,
   },
 });
