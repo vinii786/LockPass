@@ -7,16 +7,14 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-} from "react-native";
-import Feather from "react-native-vector-icons/Feather";
-import axios from "axios";
-import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Keyboard,
+  ActivityIndicator,
 } from "react-native";
 import { TouchableWithoutFeedback } from "react-native";
+import axios from "axios";
 
 export default function UserScreen({ route }) {
   const { user } = route.params;
@@ -25,26 +23,23 @@ export default function UserScreen({ route }) {
     user.userName.replace("Container", "")
   );
   const [userEmail, setUserEmail] = useState(user.userEmail);
-
-  const [editandoNome, setEditandoNome] = useState(false);
-  const [editandoEmail, setEditandoEmail] = useState(false);
-  const [editandoSenha, setEditandoSenha] = useState(false);
-
   const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmacaoSenha, setConfirmacaoSenha] = useState("");
+
+  const [isEditing, setIsEditing] = useState(false);
   const [carregando, setCarregando] = useState(false);
 
   const handleSalvar = async () => {
-    if (!editandoEmail && !editandoSenha && !editandoNome) {
-      Alert.alert("Nada para salvar", "Ative a edição para alterar os dados.");
-      return;
-    }
+    setCarregando(true);
+    let userDetailsUpdated = false;
+    let passwordUpdated = false;
 
     try {
-      setCarregando(true);
-
-      if (editandoEmail || editandoNome) {
+      if (
+        userName !== user.userName.replace("Container", "") ||
+        userEmail !== user.userEmail
+      ) {
         await axios.put(
           `https://lockpassapi20250324144759.azurewebsites.net/api/user/updateuser?userId=${user.userId}`,
           {
@@ -52,19 +47,23 @@ export default function UserScreen({ route }) {
             userEmail,
           }
         );
+        userDetailsUpdated = true;
       }
 
-      if (editandoSenha) {
+      if (senhaAtual || novaSenha || confirmacaoSenha) {
         if (!senhaAtual || !novaSenha || !confirmacaoSenha) {
-          Alert.alert("Erro", "Preencha todos os campos de senha.");
+          Alert.alert(
+            "Erro",
+            "Para alterar a senha, preencha todos os campos: senha atual, nova senha e confirmação da nova senha."
+          );
           setCarregando(false);
-          return;
+          return false;
         }
 
         if (novaSenha !== confirmacaoSenha) {
           Alert.alert("Erro", "As novas senhas não coincidem.");
           setCarregando(false);
-          return;
+          return false;
         }
 
         await axios.put(
@@ -75,118 +74,135 @@ export default function UserScreen({ route }) {
             newPasswordConfirmation: confirmacaoSenha,
           }
         );
+        passwordUpdated = true;
       }
 
-      Alert.alert("Sucesso", "Dados atualizados com sucesso!");
-      setEditandoNome(false);
-      setEditandoEmail(false);
-      setEditandoSenha(false);
+      if (userDetailsUpdated || passwordUpdated) {
+        Alert.alert("Sucesso", "Dados atualizados com sucesso!");
+      } else {
+        Alert.alert("Nenhuma alteração", "Nenhum dado foi modificado.");
+      }
+
       setSenhaAtual("");
       setNovaSenha("");
       setConfirmacaoSenha("");
-    } catch (error) {
-      Alert.alert("Erro", "Não foi possível atualizar os dados.");
-    } finally {
       setCarregando(false);
+      return true;
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.title ||
+        "Não foi possível atualizar os dados. Verifique os campos e tente novamente.";
+      Alert.alert("Erro na atualização", errorMessage);
+      setCarregando(false);
+      return false;
+    }
+  };
+
+  const handleEditSaveToggle = async () => {
+    if (isEditing) {
+      const saveSuccessful = await handleSalvar();
+      if (saveSuccessful) {
+        setIsEditing(false);
+      }
+    } else {
+      setIsEditing(true);
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: "#fff" }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 20}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, padding: 20 }}
+          contentContainerStyle={styles.scrollContainer}
           keyboardShouldPersistTaps="handled"
         >
-          <View>
+          <View style={styles.innerContainer}>
             <View style={styles.user}>
               <Image
                 source={require("../assets/homem.png")}
                 style={styles.avatar}
               />
               <View style={styles.nameBox}>
-                <Text style={styles.userName}>Nome de usuario:</Text>
+                <Text style={styles.userNameLabel}>Nome de usuário:</Text>
               </View>
-              <View style={styles.inputBox}>
+              <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   value={userName}
                   onChangeText={setUserName}
-                  editable={editandoNome}
-                />
-                <Feather
-                  name="edit"
-                  size={24}
-                  onPress={() => setEditandoNome(!editandoNome)}
-                  color={editandoNome ? "green" : "black"}
+                  editable={isEditing}
+                  placeholder="Nome de usuário"
                 />
               </View>
             </View>
 
             <Text style={styles.label}>Email</Text>
-            <View style={styles.inputBox}>
+            <View style={styles.inputContainer}>
               <TextInput
                 style={styles.input}
                 value={userEmail}
                 onChangeText={setUserEmail}
-                editable={editandoEmail}
-              />
-              <Feather
-                name="edit"
-                size={24}
-                onPress={() => setEditandoEmail(!editandoEmail)}
-                color={editandoEmail ? "green" : "black"}
+                editable={isEditing}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="Seu email"
               />
             </View>
 
-            <TouchableOpacity
-              onPress={() => setEditandoSenha(!editandoSenha)}
-              style={styles.button}
-            >
-              <Text style={styles.buttonText}>
-                {editandoSenha ? "Cancelar" : "Editar senha"}
-              </Text>
-            </TouchableOpacity>
-
-            {editandoSenha && (
+            {isEditing && (
               <>
                 <Text style={styles.label}>Senha atual</Text>
-                <TextInput
-                  style={styles.inputBox}
-                  value={senhaAtual}
-                  onChangeText={setSenhaAtual}
-                  secureTextEntry
-                />
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={senhaAtual}
+                    onChangeText={setSenhaAtual}
+                    secureTextEntry
+                    placeholder="(deixe em branco para não alterar)"
+                  />
+                </View>
 
                 <Text style={styles.label}>Nova senha</Text>
-                <TextInput
-                  style={styles.inputBox}
-                  value={novaSenha}
-                  onChangeText={setNovaSenha}
-                  secureTextEntry
-                />
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={novaSenha}
+                    onChangeText={setNovaSenha}
+                    secureTextEntry
+                    placeholder="(deixe em branco para não alterar)"
+                  />
+                </View>
 
                 <Text style={styles.label}>Confirme a nova senha</Text>
-                <TextInput
-                  style={styles.inputBox}
-                  value={confirmacaoSenha}
-                  onChangeText={setConfirmacaoSenha}
-                  secureTextEntry
-                />
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    value={confirmacaoSenha}
+                    onChangeText={setConfirmacaoSenha}
+                    secureTextEntry
+                    placeholder="Confirme a nova senha"
+                  />
+                </View>
               </>
             )}
-
-            {(editandoNome || editandoEmail || editandoSenha) && (
-              <TouchableOpacity style={styles.button} onPress={handleSalvar}>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={handleEditSaveToggle}
+              disabled={carregando}
+            >
+              {carregando ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
                 <Text style={styles.buttonText}>
-                  {carregando ? "Salvando..." : "Salvar Alterações"}
+                  {isEditing ? "Salvar Alterações" : "Editar Perfil"}
                 </Text>
-              </TouchableOpacity>
-            )}
+              )}
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -195,8 +211,11 @@ export default function UserScreen({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: "center",
+  },
+  innerContainer: {
     padding: 20,
     backgroundColor: "#fff",
   },
@@ -211,39 +230,36 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     marginBottom: 10,
   },
+  nameBox: {
+    alignSelf: "flex-start",
+    marginBottom: 5,
+  },
+  userNameLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
   label: {
     fontSize: 16,
     fontWeight: "600",
     marginBottom: 5,
     marginTop: 15,
+    color: "#333",
   },
-  inputBox: {
+  inputContainer: {
     flexDirection: "row",
-    height: 60,
     alignItems: "center",
-    justifyContent: "space-between",
     borderWidth: 1,
+    borderColor: "#ccc",
     borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    width: "100%",
+    paddingHorizontal: 10,
     marginBottom: 10,
-  },
-  nameBox: {
-    alignSelf: "flex-start",
-    marginBottom: 5,
-  },
-
-  userName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    paddingBottom: 0,
+    backgroundColor: "#f9f9f9",
   },
   input: {
     flex: 1,
     fontSize: 16,
-    marginRight: 10,
     color: "#000",
+    height: 50,
   },
   button: {
     marginTop: 20,
@@ -251,6 +267,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 10,
     alignItems: "center",
+    marginBottom: 20,
   },
   buttonText: {
     color: "#fff",
