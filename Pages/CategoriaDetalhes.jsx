@@ -15,11 +15,19 @@ import {
 } from "react-native";
 import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
-import * as Clipboard from "expo-clipboard"; // Importar o expo-clipboard
+import * as Clipboard from "expo-clipboard";
 
 export default function CategoriaDetalhes({ route }) {
   const { categoryName, categoryId, userId } = route.params;
-  const translateY = useRef(new Animated.Value(200)).current;
+
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const ADD_BUTTON_CONTAINER_HEIGHT = 120;
+
+  const addButtonTranslateY = scrollY.interpolate({
+    inputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT],
+    outputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT],
+    extrapolate: "clamp",
+  });
 
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [addServiceName, setAddServiceName] = useState("");
@@ -68,14 +76,6 @@ export default function CategoriaDetalhes({ route }) {
   useEffect(() => {
     fetchPasswords();
   }, [userId, categoryId]);
-
-  useEffect(() => {
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, []);
 
   const handleOpenAddModal = () => {
     setIsAddModalVisible(true);
@@ -204,7 +204,6 @@ export default function CategoriaDetalhes({ route }) {
     }));
   };
 
-  // Nova função para copiar a senha
   const handleCopyPassword = async (passwordToCopy, serviceNameStr) => {
     try {
       await Clipboard.setStringAsync(passwordToCopy);
@@ -259,30 +258,42 @@ export default function CategoriaDetalhes({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.categoryTitleText}>Senhas em: {categoryName}</Text>
-
       {loadingPasswords ? (
         <ActivityIndicator size="large" color="#14C234" style={styles.loader} />
-      ) : passwordsList.length > 0 ? (
-        <FlatList
+      ) : (
+        <Animated.FlatList
           data={passwordsList}
           renderItem={renderPasswordItem}
           keyExtractor={(item, index) =>
             item.passwordId ? item.passwordId.toString() : index.toString()
           }
           style={styles.list}
-          contentContainerStyle={{ paddingBottom: 130 }}
+          contentContainerStyle={{
+            paddingBottom: ADD_BUTTON_CONTAINER_HEIGHT + 10,
+            paddingTop: 20,
+          }}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: true }
+          )}
+          scrollEventThrottle={16}
+          ListEmptyComponent={
+            !loadingPasswords && passwordsList.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.noPasswordsText}>
+                  Nenhuma senha cadastrada nesta categoria.
+                </Text>
+              </View>
+            ) : null
+          }
         />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.noPasswordsText}>
-            Nenhuma senha cadastrada nesta categoria.
-          </Text>
-        </View>
       )}
 
       <Animated.View
-        style={[styles.addCategoryContainer, { transform: [{ translateY }] }]}
+        style={[
+          styles.addCategoryContainer,
+          { transform: [{ translateY: addButtonTranslateY }] },
+        ]}
       >
         <TouchableOpacity
           style={styles.addButton}
@@ -294,7 +305,6 @@ export default function CategoriaDetalhes({ route }) {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Modal para Adicionar Nova Senha */}
       <Modal transparent visible={isAddModalVisible} animationType="fade">
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -339,7 +349,6 @@ export default function CategoriaDetalhes({ route }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Modal para Editar Senha Existente */}
       {isEditModalVisible && editingPasswordData && (
         <Modal transparent visible={isEditModalVisible} animationType="fade">
           <KeyboardAvoidingView
@@ -415,21 +424,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   categoryTitleText: {
-    marginVertical: 20,
-    marginHorizontal: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
     fontSize: 20,
     fontWeight: "bold",
     color: "#333",
     textAlign: "center",
+    backgroundColor: "#fff",
   },
   loader: {
-    marginTop: 50,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   list: {
     flex: 1,
     paddingHorizontal: 15,
   },
-  // Renomeado de passwordItem para passwordItemContainer para clareza
   passwordItemContainer: {
     backgroundColor: "#f0f0f0",
     paddingVertical: 15,
@@ -442,10 +454,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  // Novo estilo para a área clicável das informações da senha
   passwordInfoTouchable: {
-    flex: 1, // Para ocupar o espaço disponível à esquerda dos ícones
-    marginRight: 10, // Espaço entre as informações e os ícones de ação
+    flex: 1,
+    marginRight: 10,
   },
   serviceNameText: {
     fontSize: 17,
@@ -470,7 +481,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
+    padding: 20,
   },
   noPasswordsText: {
     fontSize: 16,
@@ -480,7 +491,7 @@ const styles = StyleSheet.create({
   addCategoryContainer: {
     position: "absolute",
     width: "100%",
-    height: 120,
+    height: 150,
     backgroundColor: "#2d2d2d",
     paddingVertical: 15,
     borderTopLeftRadius: 20,
@@ -490,18 +501,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    elevation: 5,
+    elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
   },
   addButton: {
     flexDirection: "row",
-    backgroundColor: "#14C234",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
+    backgroundColor: "#464646",
+    paddingVertical: 20,
+    paddingHorizontal: 30,
+    borderRadius: 30,
     alignItems: "center",
     gap: 10,
   },
@@ -544,6 +555,7 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     fontSize: 16,
     backgroundColor: "#f9f9f9",
+    color: "#000000",
   },
   categoryInfoText: {
     fontSize: 14,
@@ -576,7 +588,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 50,
     elevation: 2,
-    marginHorizontal: 0, // Garante que não haja margens laterais extras
+    marginHorizontal: 0,
   },
   modalButtonText: {
     color: "#fff",
