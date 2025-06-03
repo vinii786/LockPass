@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
@@ -11,48 +10,46 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Modal,
+  TouchableWithoutFeedback,
+  FlatList,
 } from "react-native";
 import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
 
 export default function Home({ route, navigation }) {
-  const translateY = useRef(new Animated.Value(0)).current;
-
   const user = route.params?.user;
   const userId = user?.userId;
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [categoryName, setCategoryName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [showDeleteIcons, setShowDeleteIcons] = useState(false);
+  const [isAddCategoryModalVisible, setIsAddCategoryModalVisible] =
+    useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [loadingAddCategory, setLoadingAddCategory] = useState(false);
 
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
 
-  const handleScroll = (event) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    if (offsetY > 100) {
-      Animated.timing(translateY, {
-        toValue: 200,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
+  const [isCategoryOptionsMenuVisible, setIsCategoryOptionsMenuVisible] =
+    useState(false);
+  const [selectedCategoryForMenu, setSelectedCategoryForMenu] = useState(null);
+  const [isEditCategoryNameModalVisible, setIsEditCategoryNameModalVisible] =
+    useState(false);
+  const [editingCategoryNewName, setEditingCategoryNewName] = useState("");
+  const [loadingUpdateCategory, setLoadingUpdateCategory] = useState(false);
 
-  const handleAddCategoryPress = () => {
-    setModalVisible(true);
-  };
-  //busca
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const ADD_BUTTON_CONTAINER_HEIGHT = 120;
+  const addButtonTranslateY = scrollY.interpolate({
+    inputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT / 2],
+    outputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT + 30],
+    extrapolate: "clamp",
+  });
+
   const fetchCategories = async () => {
-    if (!userId) return;
-
+    if (!userId) {
+      console.log("UserID não encontrado para fetchCategories na Home.");
+      return;
+    }
     setLoadingCategories(true);
     try {
       const response = await axios.get(
@@ -62,56 +59,71 @@ export default function Home({ route, navigation }) {
         setCategories(response.data);
       } else {
         Alert.alert("Erro", "Falha ao carregar categorias");
+        setCategories([]);
       }
     } catch (error) {
-      Alert.alert("Erro", "Não foi possível conectar à API.");
+      Alert.alert(
+        "Erro",
+        "Não foi possível conectar à API para buscar categorias."
+      );
+      console.error("Erro fetchCategories:", error);
+      setCategories([]);
     } finally {
       setLoadingCategories(false);
     }
   };
 
   useEffect(() => {
-    fetchCategories();
+    if (userId) {
+      fetchCategories();
+    }
   }, [userId]);
 
-  //adiciona
-  const handleSubmitCategory = async () => {
-    if (!categoryName.trim()) {
+  const handleOpenAddCategoryModal = () => {
+    setIsAddCategoryModalVisible(true);
+  };
+
+  const handleSubmitNewCategory = async () => {
+    if (!newCategoryName.trim()) {
       Alert.alert("Erro", "Por favor, insira o nome da categoria.");
       return;
     }
-
-    setLoading(true);
-
+    setLoadingAddCategory(true);
     try {
       const response = await axios.post(
         `https://lockpassapi20250324144759.azurewebsites.net/api/category/${userId}`,
         {
-          categoryName: categoryName.trim(),
+          categoryName: newCategoryName.trim(),
           userId: userId,
         }
       );
       if (response.status === 200 || response.status === 201) {
         Alert.alert("Sucesso", "Categoria adicionada com sucesso!");
-        setCategoryName("");
-        setModalVisible(false);
+        setNewCategoryName("");
+        setIsAddCategoryModalVisible(false);
         fetchCategories();
       } else {
         Alert.alert("Erro", "Falha ao adicionar a categoria.");
       }
     } catch (error) {
-      Alert.alert("Erro", "Não foi possível conectar à API.");
+      Alert.alert(
+        "Erro",
+        "Não foi possível conectar à API ao adicionar categoria."
+      );
+      console.error("Erro handleSubmitNewCategory:", error);
     } finally {
-      setLoading(false);
+      setLoadingAddCategory(false);
     }
   };
 
-  const handleDeleteCategory = async (categoryId) => {
-    console.log("Tentando excluir categoria com ID:", categoryId);
+  const handleDeleteCategory = async (categoryIdToDelete) => {
+    if (!categoryIdToDelete) return;
+
+    setIsCategoryOptionsMenuVisible(false);
 
     Alert.alert(
       "Confirmar exclusão",
-      "Tem certeza que deseja excluir esta categoria?",
+      "Tem certeza que deseja excluir esta categoria e todas as senhas associadas a ela?",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -120,19 +132,20 @@ export default function Home({ route, navigation }) {
           onPress: async () => {
             try {
               const response = await axios.delete(
-                `https://lockpassapi20250324144759.azurewebsites.net/api/category/${categoryId}`
+                `https://lockpassapi20250324144759.azurewebsites.net/api/category/${categoryIdToDelete}`
               );
-
               if (response.status === 200 || response.status === 204) {
                 Alert.alert("Sucesso", "Categoria excluída com sucesso.");
                 fetchCategories();
+                setSelectedCategoryForMenu(null);
               } else {
                 Alert.alert("Erro", "Erro ao excluir categoria.");
-                console.error("Erro na resposta da exclusão:", response);
               }
             } catch (error) {
               Alert.alert("Erro", "Erro de conexão ao excluir categoria.");
-              console.error("Erro ao tentar excluir categoria:", error);
+              console.error("Erro handleDeleteCategory:", error);
+            } finally {
+              setIsCategoryOptionsMenuVisible(false);
             }
           },
         },
@@ -140,187 +153,375 @@ export default function Home({ route, navigation }) {
     );
   };
 
+  const handleLongPressCategory = (category) => {
+    setSelectedCategoryForMenu(category);
+    setIsCategoryOptionsMenuVisible(true);
+  };
+
+  const handleOpenEditCategoryNameModal = () => {
+    if (!selectedCategoryForMenu) return;
+    setEditingCategoryNewName(selectedCategoryForMenu.categoryName);
+    setIsCategoryOptionsMenuVisible(false);
+    setIsEditCategoryNameModalVisible(true);
+  };
+
+  const handleUpdateCategoryName = async () => {
+    if (!selectedCategoryForMenu || !editingCategoryNewName.trim()) {
+      Alert.alert("Erro", "O novo nome da categoria não pode estar vazio.");
+      return;
+    }
+    setLoadingUpdateCategory(true);
+    try {
+      const response = await axios.put(
+        `https://lockpassapi20250324144759.azurewebsites.net/api/category/${selectedCategoryForMenu.categoryId}`,
+        { categoryName: editingCategoryNewName.trim(), userId: userId }
+      );
+
+      if (response.status === 200 || response.status === 204) {
+        Alert.alert("Sucesso", "Nome da categoria atualizado!");
+        setIsEditCategoryNameModalVisible(false);
+        setSelectedCategoryForMenu(null);
+        fetchCategories();
+      } else {
+        Alert.alert(
+          "Erro",
+          "Não foi possível atualizar o nome (resposta da API)."
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao atualizar nome da categoria:",
+        error.response?.data || error.message
+      );
+      Alert.alert(
+        "Erro",
+        "Não foi possível atualizar o nome da categoria (conexão/erro)."
+      );
+    } finally {
+      setLoadingUpdateCategory(false);
+    }
+  };
+
+  const renderCategoryCard = ({ item }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() =>
+        navigation.navigate("CategoriaDetalhes", {
+          categoryName: item.categoryName,
+          categoryId: item.categoryId,
+          userId: userId,
+        })
+      }
+      onLongPress={() => handleLongPressCategory(item)}
+    >
+      <Feather name="folder" size={30} color="#555" />
+      <View style={styles.footer}>
+        <Text style={styles.texto} numberOfLines={2} ellipsizeMode="tail">
+          {item.categoryName}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: "#fff" }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>Suas categorias</Text>
-          <TouchableOpacity
-            onPress={() => setShowDeleteIcons(!showDeleteIcons)}
-          >
-            <Feather
-              name="edit"
-              size={24}
-              color={showDeleteIcons ? "red" : "black"}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.categoryContainer}>
-          {loadingCategories ? (
-            <ActivityIndicator size="large" color="#0000ff" />
-          ) : categories.length > 0 ? (
-            categories.map((cat, index) => (
-              <TouchableOpacity
-                key={cat.id || index}
-                style={styles.card}
-                onPress={() =>
-                  navigation.navigate("CategoriaDetalhes", {
-                    categoryName: cat.categoryName,
-                    categoryId: cat.categoryId,
-                    userId: userId,
-                  })
-                }
-              >
-                {showDeleteIcons && (
-                  <TouchableOpacity
-                    onPress={() => handleDeleteCategory(cat.categoryId)}
-                    style={{
-                      position: "absolute",
-                      top: 8,
-                      right: 8,
-                      zIndex: 1,
-                    }}
-                  >
-                    <Feather name="trash" size={20} color="#900" />
-                  </TouchableOpacity>
-                )}
-                <Feather name="edit" size={24} />
-                <View style={styles.footer}>
-                  <Text style={styles.texto}>{cat.categoryName}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <Text style={{ textAlign: "center", width: "100%", marginTop: 20 }}>
-              Nenhuma categoria encontrada.
-            </Text>
-          )}
-        </View>
-
-        {user && (
-          <View style={{ padding: 20 }}>
-            <Text style={{ fontSize: 14, color: "#555" }}>
-              Seu ID de usuário é: {user.userId}
-            </Text>
+      <View style={styles.container}>
+        {loadingCategories ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#14C234" />
           </View>
+        ) : (
+          <Animated.FlatList
+            data={categories}
+            renderItem={renderCategoryCard}
+            keyExtractor={(item) => item.categoryId.toString()}
+            numColumns={2}
+            style={styles.listStyle}
+            contentContainerStyle={styles.listContentContainer}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: true }
+            )}
+            scrollEventThrottle={16}
+            ListHeaderComponent={
+              <View style={styles.header}>
+                <Text style={styles.title}>Suas categorias</Text>
+              </View>
+            }
+            ListEmptyComponent={
+              !loadingCategories && categories.length === 0 ? (
+                <View style={styles.emptyListContainer}>
+                  <Text style={styles.emptyListText}>
+                    Nenhuma categoria encontrada.
+                  </Text>
+                </View>
+              ) : null
+            }
+          />
         )}
-      </ScrollView>
+      </View>
 
       <Animated.View
-        style={[styles.addCategoryContainer, { transform: [{ translateY }] }]}
+        style={[
+          styles.addCategoryContainer,
+          { transform: [{ translateY: addButtonTranslateY }] },
+        ]}
       >
         <TouchableOpacity
           style={styles.addButton}
-          onPress={handleAddCategoryPress}
-          disabled={loading}
+          onPress={handleOpenAddCategoryModal}
+          disabled={loadingAddCategory}
         >
           <Feather name="plus" size={20} color="white" />
           <Text style={styles.addButtonText}>Adicionar Categoria</Text>
         </TouchableOpacity>
       </Animated.View>
 
-      {modalVisible && (
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-          keyboardVerticalOffset={100}
+      {isAddCategoryModalVisible && (
+        <Modal
+          transparent
+          visible={isAddCategoryModalVisible}
+          animationType="fade"
+          onRequestClose={() => setIsAddCategoryModalVisible(false)}
         >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Nova Categoria</Text>
-            <TextInput
-              placeholder="Nome da categoria"
-              value={categoryName}
-              onChangeText={setCategoryName}
-              style={styles.modalInput}
-              editable={!loading}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={[styles.modalButton, { backgroundColor: "#888" }]}
-                disabled={loading}
-              >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleSubmitCategory}
-                style={[styles.modalButton, { backgroundColor: "#14C234" }]}
-                disabled={loading}
-              >
-                <Text style={styles.modalButtonText}>
-                  {loading ? "Salvando..." : "Salvar"}
-                </Text>
-              </TouchableOpacity>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalView}>
+              <Text style={styles.modalTitle}>Nova Categoria</Text>
+              <TextInput
+                placeholder="Nome da categoria"
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+                style={styles.modalInput}
+                editable={!loadingAddCategory}
+              />
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  onPress={() => setIsAddCategoryModalVisible(false)}
+                  style={[
+                    styles.modalButtonAction,
+                    { backgroundColor: "#888" },
+                  ]}
+                  disabled={loadingAddCategory}
+                >
+                  <Text style={styles.modalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSubmitNewCategory}
+                  style={[
+                    styles.modalButtonAction,
+                    { backgroundColor: "#14C234" },
+                  ]}
+                  disabled={loadingAddCategory}
+                >
+                  <Text style={styles.modalButtonText}>
+                    {loadingAddCategory ? "Salvando..." : "Salvar"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
+
+      {selectedCategoryForMenu && (
+        <Modal
+          transparent={true}
+          visible={isCategoryOptionsMenuVisible}
+          onRequestClose={() => {
+            setIsCategoryOptionsMenuVisible(false);
+            setSelectedCategoryForMenu(null);
+          }}
+          animationType="fade"
+        >
+          <TouchableWithoutFeedback
+            onPress={() => {
+              setIsCategoryOptionsMenuVisible(false);
+              setSelectedCategoryForMenu(null);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={styles.menuOptionContainer}>
+                  <Text style={styles.menuOptionTitle}>
+                    Opções para "{selectedCategoryForMenu.categoryName}"
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.menuOptionItem}
+                    onPress={handleOpenEditCategoryNameModal}
+                  >
+                    <Feather name="edit-2" size={20} color="#333" />
+                    <Text style={styles.menuOptionItemText}>Editar Nome</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuOptionItem}
+                    onPress={() =>
+                      handleDeleteCategory(selectedCategoryForMenu.categoryId)
+                    }
+                  >
+                    <Feather name="trash" size={20} color="#D9534F" />
+                    <Text
+                      style={[styles.menuOptionItemText, { color: "#D9534F" }]}
+                    >
+                      Excluir Categoria
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.menuOptionItem, styles.menuOptionCancel]}
+                    onPress={() => {
+                      setIsCategoryOptionsMenuVisible(false);
+                      setSelectedCategoryForMenu(null);
+                    }}
+                  >
+                    <Feather name="x-circle" size={20} color="#555" />
+                    <Text style={styles.menuOptionItemText}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      )}
+
+      {isEditCategoryNameModalVisible && selectedCategoryForMenu && (
+        <Modal
+          transparent={true}
+          visible={isEditCategoryNameModalVisible}
+          onRequestClose={() => setIsEditCategoryNameModalVisible(false)}
+          animationType="fade"
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalView}>
+              <Text style={styles.modalTitle}>Editar Nome da Categoria</Text>
+              <Text style={styles.currentCategoryNameText}>
+                Nome atual: {selectedCategoryForMenu.categoryName}
+              </Text>
+              <TextInput
+                placeholder="Novo nome da categoria"
+                value={editingCategoryNewName}
+                onChangeText={setEditingCategoryNewName}
+                style={styles.modalInput}
+                editable={!loadingUpdateCategory}
+              />
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButtonAction,
+                    { backgroundColor: "#888" },
+                  ]}
+                  onPress={() => setIsEditCategoryNameModalVisible(false)}
+                  disabled={loadingUpdateCategory}
+                >
+                  <Text style={styles.modalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.modalButtonAction,
+                    { backgroundColor: "#14C234" },
+                  ]}
+                  onPress={handleUpdateCategoryName}
+                  disabled={loadingUpdateCategory}
+                >
+                  {loadingUpdateCategory ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.modalButtonText}>Salvar</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       )}
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    paddingBottom: 120,
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  listStyle: {
+    flex: 1,
+  },
+  listContentContainer: {
+    paddingHorizontal: 10,
+    paddingBottom: 150,
   },
   header: {
-    margin: 20,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    alignItems: "flex-start",
+    width: "100%",
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "bold",
-  },
-  categoryContainer: {
-    marginHorizontal: 20,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    marginTop: 20,
+    color: "#333",
   },
   card: {
-    width: "48%",
-    height: 190,
-    borderRadius: 20,
+    flex: 1,
+    margin: 8,
+    height: 150,
+    borderRadius: 15,
     backgroundColor: "#D8D8D8",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
-    overflow: "hidden",
-    position: "relative",
-    elevation: 2,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    minWidth: "40%",
   },
   footer: {
     position: "absolute",
     bottom: 0,
     width: "100%",
-    backgroundColor: "#B9B9B9",
-    paddingVertical: 6,
+    backgroundColor: "rgba(185, 185, 185, 0.8)",
+    paddingVertical: 8,
+    paddingHorizontal: 5,
     alignItems: "center",
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
   },
   texto: {
-    fontSize: 12,
+    fontSize: 14,
     color: "#464646",
     fontWeight: "bold",
+    textAlign: "center",
+  },
+  emptyListContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 50,
+    minHeight: 200,
+  },
+  emptyListText: {
+    fontSize: 16,
+    color: "#666",
   },
   addCategoryContainer: {
     position: "absolute",
     width: "100%",
-    height: 200,
+    height: 120,
     backgroundColor: "#2d2d2d",
-    paddingVertical: 20,
+    paddingVertical: 15,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     alignItems: "center",
@@ -328,65 +529,118 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
   },
   addButton: {
     flexDirection: "row",
-    backgroundColor: "#464646",
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    borderRadius: 30,
+    backgroundColor: "#14C234",
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 25,
     alignItems: "center",
     gap: 10,
   },
   addButtonText: {
     color: "#fff",
     fontWeight: "bold",
-    fontSize: 14,
+    fontSize: 16,
   },
-
   modalOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
     padding: 20,
-    borderRadius: 12,
+  },
+  modalView: {
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    padding: 25,
     width: "100%",
-    maxWidth: 400,
+    maxWidth: 380,
+    alignItems: "stretch",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "bold",
-    marginBottom: 15,
+    marginBottom: 20,
+    textAlign: "center",
+    color: "#333",
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 20,
+    fontSize: 16,
+    backgroundColor: "#f9f9f9",
+    color: "#000",
   },
-  modalButtons: {
+  modalButtonsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginTop: 10,
   },
-  modalButton: {
+  modalButtonAction: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 5,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 5,
+    minHeight: 48,
   },
   modalButtonText: {
     color: "#fff",
     fontWeight: "bold",
+    fontSize: 16,
+  },
+  menuOptionContainer: {
+    backgroundColor: "white",
+    borderRadius: 10,
+    paddingVertical: 0,
+    width: "90%",
+    maxWidth: 320,
+    elevation: 5,
+    overflow: "hidden",
+  },
+  menuOptionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 15,
+    textAlign: "center",
+    color: "#333",
+  },
+  menuOptionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#eee",
+  },
+  menuOptionItemText: {
+    fontSize: 16,
+    marginLeft: 15,
+    color: "#333",
+  },
+  menuOptionCancel: {},
+  currentCategoryNameText: {
+    fontSize: 14,
+    color: "#555",
+    marginBottom: 15,
+    textAlign: "center",
   },
 });
