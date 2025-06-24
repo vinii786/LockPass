@@ -43,7 +43,14 @@ export default function CategoriaDetalhes({ route }) {
 
   const [passwordsList, setPasswordsList] = useState([]);
   const [loadingPasswords, setLoadingPasswords] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState({});
+
+  const [revealedPasswords, setRevealedPasswords] = useState({});
+
+  const [isAppPasswordModalVisible, setIsAppPasswordModalVisible] =
+    useState(false);
+  const [appPassword, setAppPassword] = useState("");
+  const [passwordToRevealId, setPasswordToRevealId] = useState(null);
+  const [loadingReveal, setLoadingReveal] = useState(false);
 
   const fetchPasswords = async () => {
     if (!userId || !categoryId) return;
@@ -88,7 +95,7 @@ export default function CategoriaDetalhes({ route }) {
     }
     setLoadingAddPassword(true);
     try {
-      const response = await axios.post(
+      await axios.post(
         `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}`,
         {
           serviceName: addServiceName.trim(),
@@ -96,21 +103,12 @@ export default function CategoriaDetalhes({ route }) {
           categoryId,
         }
       );
-
-      if (response.status === 200 || response.status === 201) {
-        Alert.alert("Sucesso", "Senha adicionada com sucesso!");
-        setIsAddModalVisible(false);
-        setAddServiceName("");
-        setAddPassword("");
-        fetchPasswords();
-      } else {
-        Alert.alert("Erro", "Não foi possível adicionar a senha.");
-      }
+      Alert.alert("Sucesso", "Senha adicionada com sucesso!");
+      setIsAddModalVisible(false);
+      setAddServiceName("");
+      setAddPassword("");
+      fetchPasswords();
     } catch (error) {
-      console.error(
-        "Erro ao salvar senha:",
-        error.response?.data || error.message
-      );
       Alert.alert("Erro", "Falha na conexão com a API ao salvar senha.");
     } finally {
       setLoadingAddPassword(false);
@@ -130,7 +128,6 @@ export default function CategoriaDetalhes({ route }) {
       return;
     }
     if (!editingPasswordData) return;
-
     setLoadingUpdatePassword(true);
     try {
       await axios.put(
@@ -146,10 +143,6 @@ export default function CategoriaDetalhes({ route }) {
       setEditingPasswordData(null);
       fetchPasswords();
     } catch (error) {
-      console.error(
-        "Erro ao atualizar senha:",
-        error.response?.data || error.message
-      );
       Alert.alert("Erro", "Não foi possível atualizar a senha.");
     } finally {
       setLoadingUpdatePassword(false);
@@ -157,17 +150,12 @@ export default function CategoriaDetalhes({ route }) {
   };
 
   const handleDeletePassword = async () => {
-    if (!editingPasswordData || !editingPasswordData.passwordId) return;
-
+    if (!editingPasswordData) return;
     Alert.alert(
       "Confirmar Exclusão",
-      `Tem certeza que deseja apagar a senha para "${editingPasswordData.serviceName}"? Esta ação não pode ser desfeita.`,
+      `Tem certeza que deseja apagar a senha para "${editingPasswordData.serviceName}"?`,
       [
-        {
-          text: "Cancelar",
-          style: "cancel",
-          onPress: () => setLoadingDeletePassword(false),
-        },
+        { text: "Cancelar", style: "cancel" },
         {
           text: "Apagar",
           style: "destructive",
@@ -182,61 +170,100 @@ export default function CategoriaDetalhes({ route }) {
               setEditingPasswordData(null);
               fetchPasswords();
             } catch (error) {
-              console.error(
-                "Erro ao apagar senha:",
-                error.response?.data || error.message
-              );
               Alert.alert("Erro", "Não foi possível apagar a senha.");
             } finally {
               setLoadingDeletePassword(false);
             }
           },
         },
-      ],
-      { cancelable: true, onDismiss: () => setLoadingDeletePassword(false) }
+      ]
     );
   };
 
-  const togglePasswordVisibility = (passwordId) => {
-    setVisiblePasswords((prev) => ({
-      ...prev,
-      [passwordId]: !prev[passwordId],
-    }));
+  const handleToggleVisibility = (passwordId) => {
+    if (revealedPasswords[passwordId]) {
+      setRevealedPasswords((prev) => {
+        const newState = { ...prev };
+        delete newState[passwordId];
+        return newState;
+      });
+    } else {
+      setPasswordToRevealId(passwordId);
+      setIsAppPasswordModalVisible(true);
+    }
   };
 
-  const handleCopyPassword = async (passwordToCopy, serviceNameStr) => {
+  const handleRevealPassword = async () => {
+    if (!appPassword || !passwordToRevealId) {
+      Alert.alert("Erro", "Por favor, insira a senha do aplicativo.");
+      return;
+    }
+    setLoadingReveal(true);
+    try {
+      const response = await axios.get(
+        `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}/${passwordToRevealId}/getandreveal`,
+        { params: { AppPassword: appPassword } } //
+      );
+
+      if (response.status === 200 && response.data) {
+        setRevealedPasswords((prev) => ({
+          ...prev,
+          [passwordToRevealId]: response.data, // Assumindo que a API retorna a senha descriptografada como string
+        }));
+        setIsAppPasswordModalVisible(false);
+      } else {
+        Alert.alert("Erro", "Não foi possível revelar a senha.");
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao revelar senha:",
+        error.response?.data || error.message
+      );
+      Alert.alert(
+        "Falha na Descriptografia",
+        "Senha do aplicativo incorreta ou falha na API."
+      );
+    } finally {
+      setAppPassword("");
+      setPasswordToRevealId(null);
+      setLoadingReveal(false);
+    }
+  };
+
+  const handleCopyPassword = async (item) => {
+    const passwordToCopy =
+      revealedPasswords[item.passwordId] || item.encryptedPassword;
     try {
       await Clipboard.setStringAsync(passwordToCopy);
       Alert.alert(
-        "Senha Copiada",
-        `A senha para "${serviceNameStr}" foi copiada para a área de transferência.`
+        "Copiado",
+        `A senha para "${item.serviceName}" foi copiada para a área de transferência.`
       );
     } catch (e) {
-      console.error("Erro ao copiar senha:", e);
       Alert.alert("Erro", "Não foi possível copiar a senha.");
     }
   };
 
   const renderPasswordItem = ({ item }) => {
-    const isPasswordVisible = !!visiblePasswords[item.passwordId];
+    const isPasswordVisible = !!revealedPasswords[item.passwordId];
+    const passwordToShow = isPasswordVisible
+      ? revealedPasswords[item.passwordId]
+      : "••••••••••";
+
     return (
       <View style={styles.passwordItemContainer}>
         <TouchableOpacity
           style={styles.passwordInfoTouchable}
-          onPress={() =>
-            handleCopyPassword(item.encryptedPassword, item.serviceName)
-          }
+          onPress={() => handleCopyPassword(item)}
         >
           <Text style={styles.serviceNameText}>
             Serviço: {item.serviceName}
           </Text>
-          <Text style={styles.passwordText}>
-            Senha: {isPasswordVisible ? item.encryptedPassword : "••••••••••"}
-          </Text>
+          <Text style={styles.passwordText}>Senha: {passwordToShow}</Text>
         </TouchableOpacity>
         <View style={styles.passwordActions}>
           <TouchableOpacity
-            onPress={() => togglePasswordVisibility(item.passwordId)}
+            onPress={() => handleToggleVisibility(item.passwordId)}
             style={styles.actionIcon}
           >
             <Feather
@@ -258,19 +285,17 @@ export default function CategoriaDetalhes({ route }) {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.categoryTitleText}>Senhas em: {categoryName}</Text>
       {loadingPasswords ? (
         <ActivityIndicator size="large" color="#14C234" style={styles.loader} />
       ) : (
         <Animated.FlatList
           data={passwordsList}
           renderItem={renderPasswordItem}
-          keyExtractor={(item, index) =>
-            item.passwordId ? item.passwordId.toString() : index.toString()
-          }
+          keyExtractor={(item) => item.passwordId.toString()}
           style={styles.list}
           contentContainerStyle={{
             paddingBottom: ADD_BUTTON_CONTAINER_HEIGHT + 10,
-            paddingTop: 20,
           }}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -414,6 +439,49 @@ export default function CategoriaDetalhes({ route }) {
           </KeyboardAvoidingView>
         </Modal>
       )}
+
+      <Modal
+        transparent
+        visible={isAppPasswordModalVisible}
+        animationType="fade"
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar Identidade</Text>
+            <TextInput
+              placeholder="Senha do Aplicativo"
+              value={appPassword}
+              onChangeText={setAppPassword}
+              style={styles.input}
+              secureTextEntry
+              editable={!loadingReveal}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: "#888" }]}
+                onPress={() => setIsAppPasswordModalVisible(false)}
+                disabled={loadingReveal}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: "#14C234" }]}
+                onPress={handleRevealPassword}
+                disabled={loadingReveal}
+              >
+                {loadingReveal ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalButtonText}>Revelar</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }

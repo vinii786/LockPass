@@ -13,6 +13,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
   FlatList,
+  Image,
 } from "react-native";
 import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
@@ -24,10 +25,14 @@ export default function Home({ route, navigation }) {
   const [isAddCategoryModalVisible, setIsAddCategoryModalVisible] =
     useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [selectedIconUrl, setSelectedIconUrl] = useState(null);
   const [loadingAddCategory, setLoadingAddCategory] = useState(false);
 
   const [categories, setCategories] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
+
+  const [iconOptions, setIconOptions] = useState([]);
+  const [loadingIcons, setLoadingIcons] = useState(false);
 
   const [isCategoryOptionsMenuVisible, setIsCategoryOptionsMenuVisible] =
     useState(false);
@@ -45,9 +50,31 @@ export default function Home({ route, navigation }) {
     extrapolate: "clamp",
   });
 
+  const fetchIcons = async () => {
+    setLoadingIcons(true);
+    try {
+      const response = await axios.get(
+        "https://lockpassapi20250324144759.azurewebsites.net/api/category/icons"
+      );
+      if (response.status === 200 && Array.isArray(response.data)) {
+        setIconOptions(response.data);
+        if (response.data.length > 0) {
+          setSelectedIconUrl(response.data[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao buscar ícones:", error);
+      Alert.alert(
+        "Erro de API",
+        "Não foi possível carregar os ícones para seleção."
+      );
+    } finally {
+      setLoadingIcons(false);
+    }
+  };
+
   const fetchCategories = async () => {
     if (!userId) {
-      console.log("UserID não encontrado para fetchCategories na Home.");
       return;
     }
     setLoadingCategories(true);
@@ -77,15 +104,22 @@ export default function Home({ route, navigation }) {
     if (userId) {
       fetchCategories();
     }
+    fetchIcons();
   }, [userId]);
 
   const handleOpenAddCategoryModal = () => {
+    if (iconOptions.length > 0) {
+      setSelectedIconUrl(iconOptions[0]);
+    }
     setIsAddCategoryModalVisible(true);
   };
 
   const handleSubmitNewCategory = async () => {
-    if (!newCategoryName.trim()) {
-      Alert.alert("Erro", "Por favor, insira o nome da categoria.");
+    if (!newCategoryName.trim() || !selectedIconUrl) {
+      Alert.alert(
+        "Erro",
+        "Por favor, insira o nome da categoria e selecione um ícone."
+      );
       return;
     }
     setLoadingAddCategory(true);
@@ -94,7 +128,7 @@ export default function Home({ route, navigation }) {
         `https://lockpassapi20250324144759.azurewebsites.net/api/category/${userId}`,
         {
           categoryName: newCategoryName.trim(),
-          userId: userId,
+          iconUrl: selectedIconUrl,
         }
       );
       if (response.status === 200 || response.status === 201) {
@@ -118,9 +152,7 @@ export default function Home({ route, navigation }) {
 
   const handleDeleteCategory = async (categoryIdToDelete) => {
     if (!categoryIdToDelete) return;
-
     setIsCategoryOptionsMenuVisible(false);
-
     Alert.alert(
       "Confirmar exclusão",
       "Tem certeza que deseja excluir esta categoria e todas as senhas associadas a ela?",
@@ -144,8 +176,6 @@ export default function Home({ route, navigation }) {
             } catch (error) {
               Alert.alert("Erro", "Erro de conexão ao excluir categoria.");
               console.error("Erro handleDeleteCategory:", error);
-            } finally {
-              setIsCategoryOptionsMenuVisible(false);
             }
           },
         },
@@ -174,9 +204,12 @@ export default function Home({ route, navigation }) {
     try {
       const response = await axios.put(
         `https://lockpassapi20250324144759.azurewebsites.net/api/category/${selectedCategoryForMenu.categoryId}`,
-        { categoryName: editingCategoryNewName.trim(), userId: userId }
+        {
+          categoryName: editingCategoryNewName.trim(),
+          userId: userId,
+          iconUrl: selectedCategoryForMenu.iconUrl,
+        }
       );
-
       if (response.status === 200 || response.status === 204) {
         Alert.alert("Sucesso", "Nome da categoria atualizado!");
         setIsEditCategoryNameModalVisible(false);
@@ -214,7 +247,12 @@ export default function Home({ route, navigation }) {
       }
       onLongPress={() => handleLongPressCategory(item)}
     >
-      <Feather name="folder" size={30} color="#555" />
+      {item.iconUrl &&
+      (item.iconUrl.startsWith("http") || item.iconUrl.startsWith("https")) ? (
+        <Image source={{ uri: item.iconUrl }} style={styles.cardIconImage} />
+      ) : (
+        <Feather name={"folder"} size={30} color="#555" />
+      )}
       <View style={styles.footer}>
         <Text style={styles.texto} numberOfLines={2} ellipsizeMode="tail">
           {item.categoryName}
@@ -300,6 +338,30 @@ export default function Home({ route, navigation }) {
                 style={styles.modalInput}
                 editable={!loadingAddCategory}
               />
+              <Text style={styles.iconSelectorTitle}>Escolha um Ícone</Text>
+              {loadingIcons ? (
+                <ActivityIndicator color="#14C234" />
+              ) : (
+                <View style={styles.iconSelectorContainer}>
+                  {iconOptions.map((iconUrl) => (
+                    <TouchableOpacity
+                      key={iconUrl}
+                      style={[
+                        styles.iconWrapper,
+                        selectedIconUrl === iconUrl &&
+                          styles.iconWrapperSelected,
+                      ]}
+                      onPress={() => setSelectedIconUrl(iconUrl)}
+                    >
+                      <Image
+                        source={{ uri: iconUrl }}
+                        style={styles.iconImage}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
               <View style={styles.modalButtonsRow}>
                 <TouchableOpacity
                   onPress={() => setIsAddCategoryModalVisible(false)}
@@ -488,6 +550,12 @@ const styles = StyleSheet.create({
     shadowRadius: 2.22,
     minWidth: "40%",
   },
+  cardIconImage: {
+    width: 40,
+    height: 40,
+    resizeMode: "contain",
+    marginBottom: 10,
+  },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -581,10 +649,39 @@ const styles = StyleSheet.create({
     borderColor: "#ddd",
     borderRadius: 10,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 15,
     fontSize: 16,
     backgroundColor: "#f9f9f9",
     color: "#000",
+  },
+  iconSelectorTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  iconSelectorContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  iconWrapper: {
+    margin: 5,
+    padding: 10,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: "#ddd",
+  },
+  iconWrapperSelected: {
+    borderColor: "#14C234",
+    backgroundColor: "#e8f5e9",
+  },
+  iconImage: {
+    width: 32,
+    height: 32,
+    resizeMode: "contain",
   },
   modalButtonsRow: {
     flexDirection: "row",
