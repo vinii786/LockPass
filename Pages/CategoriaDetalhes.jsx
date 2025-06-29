@@ -1,9 +1,8 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Animated,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -17,266 +16,214 @@ import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
 import * as Clipboard from "expo-clipboard";
 
-export default function CategoriaDetalhes({ route }) {
+const API_BASE_URL = "https://lockpassapi20250324144759.azurewebsites.net/api";
+
+export default function CategoriaDetalhes({ route, navigation }) {
   const { categoryName, categoryId, userId } = route.params;
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-  const ADD_BUTTON_CONTAINER_HEIGHT = 120;
+  const [passwordsList, setPasswordsList] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+  
+  const [revealedPasswords, setRevealedPasswords] = useState({});
+  const [visiblePasswords, setVisiblePasswords] = useState({});
+  const [passwordToReveal, setPasswordToReveal] = useState(null);
 
-  const addButtonTranslateY = scrollY.interpolate({
-    inputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT],
-    outputRange: [0, ADD_BUTTON_CONTAINER_HEIGHT],
-    extrapolate: "clamp",
-  });
+  const [isRevealModalVisible, setIsRevealModalVisible] = useState(false);
+  const [appPassword, setAppPassword] = useState("");
+  const [loadingReveal, setLoadingReveal] = useState(false);
 
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [addServiceName, setAddServiceName] = useState("");
-  const [addPassword, setAddPassword] = useState("");
+  const [addPasswordValue, setAddPasswordValue] = useState("");
   const [loadingAddPassword, setLoadingAddPassword] = useState(false);
 
+  const [isEditAuthModalVisible, setIsEditAuthModalVisible] = useState(false);
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
-  const [editingPasswordData, setEditingPasswordData] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [editServiceName, setEditServiceName] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-  const [loadingUpdatePassword, setLoadingUpdatePassword] = useState(false);
-  const [loadingDeletePassword, setLoadingDeletePassword] = useState(false);
+  const [editPasswordValue, setEditPasswordValue] = useState("");
+  const [editAppPassword, setEditAppPassword] = useState("");
+  const [loadingEdit, setLoadingEdit] = useState(false);
 
-  const [passwordsList, setPasswordsList] = useState([]);
-  const [loadingPasswords, setLoadingPasswords] = useState(false);
-
-  const [revealedPasswords, setRevealedPasswords] = useState({});
-
-  const [isAppPasswordModalVisible, setIsAppPasswordModalVisible] =
-    useState(false);
-  const [appPassword, setAppPassword] = useState("");
-  const [passwordToRevealId, setPasswordToRevealId] = useState(null);
-  const [loadingReveal, setLoadingReveal] = useState(false);
-
-  const fetchPasswords = async () => {
-    if (!userId || !categoryId) return;
-    setLoadingPasswords(true);
+  const fetchPasswordsList = async () => {
+    setLoadingData(true);
+    const listUrl = `${API_BASE_URL}/password/user/${userId}/category/${categoryId}`;
+    
     try {
-      const response = await axios.get(
-        `https://lockpassapi20250324144759.azurewebsites.net/api/password/user/${userId}/category/${categoryId}`
-      );
-      if (response.status === 200 && response.data) {
+      const response = await axios.get(listUrl);
+      if (response.status === 200) {
         setPasswordsList(response.data);
-      } else {
-        Alert.alert("Erro", "Falha ao carregar senhas da categoria.");
-        setPasswordsList([]);
       }
     } catch (error) {
-      console.error(
-        "Erro ao buscar senhas:",
-        error.response?.data || error.message
-      );
-      Alert.alert(
-        "Erro de API",
-        "Não foi possível buscar as senhas. Verifique sua conexão ou tente mais tarde."
-      );
-      setPasswordsList([]);
+      Alert.alert("Erro de Conexão", "Não foi possível buscar a lista de senhas.");
     } finally {
-      setLoadingPasswords(false);
+      setLoadingData(false);
     }
   };
 
   useEffect(() => {
-    fetchPasswords();
-  }, [userId, categoryId]);
+    fetchPasswordsList();
+  }, []);
 
-  const handleOpenAddModal = () => {
-    setIsAddModalVisible(true);
+  const handleAttemptReveal = (passwordId) => {
+    if (revealedPasswords[passwordId]) {
+      setVisiblePasswords(prev => ({ ...prev, [passwordId]: !prev[passwordId] }));
+    } else {
+      setPasswordToReveal(passwordId);
+      setIsRevealModalVisible(true);
+    }
   };
 
+  const handleConfirmReveal = async () => {
+    if (!appPassword.trim()) {
+      Alert.alert("Atenção", "Por favor, insira a senha do aplicativo.");
+      return;
+    }
+    setLoadingReveal(true);
+    const revealUrl = `${API_BASE_URL}/password/${userId}/${passwordToReveal}/reveal`;
+
+    try {
+      const response = await axios.get(revealUrl, {
+        params: { AppPassword: appPassword },
+      });
+
+      if (response.status === 200) {
+        setRevealedPasswords(prev => ({ ...prev, [passwordToReveal]: response.data.decryptedPassword }));
+        setVisiblePasswords(prev => ({ ...prev, [passwordToReveal]: true }));
+        setIsRevealModalVisible(false);
+        setAppPassword("");
+      }
+    } catch (error) {
+      if (error.response?.status === 401) {
+        Alert.alert("Acesso Negado", "A senha do aplicativo está incorreta.");
+      } else {
+        Alert.alert("Erro", "Não foi possível revelar a senha.");
+      }
+    } finally {
+      setLoadingReveal(false);
+    }
+  };
+  
   const handleSaveNewPassword = async () => {
-    if (!addServiceName.trim() || !addPassword.trim()) {
+    if (!addServiceName.trim() || !addPasswordValue.trim()) {
       Alert.alert("Erro", "Preencha todos os campos.");
       return;
     }
     setLoadingAddPassword(true);
     try {
-      await axios.post(
-        `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}`,
-        {
-          serviceName: addServiceName.trim(),
-          password: addPassword.trim(),
-          categoryId,
-        }
-      );
-      Alert.alert("Sucesso", "Senha adicionada com sucesso!");
+      await axios.post(`${API_BASE_URL}/password/${userId}`, {
+        serviceName: addServiceName.trim(),
+        password: addPasswordValue.trim(),
+        categoryId,
+      });
+      
+      Alert.alert("Sucesso", "Senha adicionada!");
       setIsAddModalVisible(false);
       setAddServiceName("");
-      setAddPassword("");
-      fetchPasswords();
+      setAddPasswordValue("");
+      fetchPasswordsList();
     } catch (error) {
-      Alert.alert("Erro", "Falha na conexão com a API ao salvar senha.");
+      Alert.alert("Erro", "Falha ao salvar a nova senha.");
     } finally {
       setLoadingAddPassword(false);
     }
   };
 
-  const handleOpenEditModal = (passwordItem) => {
-    setEditingPasswordData(passwordItem);
-    setEditServiceName(passwordItem.serviceName);
-    setEditPassword("");
-    setIsEditModalVisible(true);
+  const handleInitiateEdit = (item) => {
+    setEditingItem(item);
+    setIsEditAuthModalVisible(true);
   };
 
-  const handleUpdatePassword = async () => {
-    if (!editServiceName.trim() || !editPassword.trim()) {
-      Alert.alert("Erro", "Nome do serviço e a nova senha são obrigatórios.");
+  const handleConfirmEditAuth = async () => {
+    if (!editAppPassword.trim()) {
+      Alert.alert("Atenção", "Por favor, insira sua senha principal.");
       return;
     }
-    if (!editingPasswordData) return;
-    setLoadingUpdatePassword(true);
+    setLoadingEdit(true);
+
+    // Usamos o endpoint de revelar para validar a senha
+    const validateUrl = `${API_BASE_URL}/password/${userId}/${editingItem.passwordId}/reveal`;
     try {
-      await axios.put(
-        `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}/${editingPasswordData.passwordId}`,
-        {
-          serviceName: editServiceName.trim(),
-          password: editPassword.trim(),
-          categoryId: categoryId,
-        }
-      );
+      await axios.get(validateUrl, { params: { AppPassword: editAppPassword } });
+
+      // Se a senha estiver correta, preparamos e abrimos o modal de edição
+      setIsEditAuthModalVisible(false);
+      setEditServiceName(editingItem.serviceName);
+      setEditPasswordValue("");
+      setIsEditModalVisible(true);
+
+    } catch (error) {
+      if (error.response?.status === 401) {
+        Alert.alert("Acesso Negado", "A senha do aplicativo está incorreta.");
+      } else {
+        Alert.alert("Erro", "Não foi possível autorizar a edição.");
+      }
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!editServiceName.trim() || !editPasswordValue.trim()) {
+      Alert.alert("Atenção", "Nome do serviço e nova senha são obrigatórios.");
+      return;
+    }
+    setLoadingEdit(true);
+
+    const editUrl = `${API_BASE_URL}/password/${userId}/${editingItem.passwordId}`;
+    const payload = {
+      serviceName: editServiceName,
+      password: editPasswordValue,
+      categoryId: categoryId,
+      appPassword: editAppPassword, // Reutiliza a senha já validada
+    };
+
+    try {
+      await axios.put(editUrl, payload);
       Alert.alert("Sucesso", "Senha atualizada com sucesso!");
       setIsEditModalVisible(false);
-      setEditingPasswordData(null);
-      fetchPasswords();
+      setEditingItem(null);
+      setEditAppPassword("");
+      
+      setRevealedPasswords({});
+      setVisiblePasswords({});
+      fetchPasswordsList();
     } catch (error) {
-      Alert.alert("Erro", "Não foi possível atualizar a senha.");
+       Alert.alert("Erro", "Não foi possível atualizar a senha.");
     } finally {
-      setLoadingUpdatePassword(false);
+      setLoadingEdit(false);
     }
   };
 
-  const handleDeletePassword = async () => {
-    if (!editingPasswordData) return;
-    Alert.alert(
-      "Confirmar Exclusão",
-      `Tem certeza que deseja apagar a senha para "${editingPasswordData.serviceName}"?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar",
-          style: "destructive",
-          onPress: async () => {
-            setLoadingDeletePassword(true);
-            try {
-              await axios.delete(
-                `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}/${editingPasswordData.passwordId}`
-              );
-              Alert.alert("Sucesso", "Senha apagada com sucesso!");
-              setIsEditModalVisible(false);
-              setEditingPasswordData(null);
-              fetchPasswords();
-            } catch (error) {
-              Alert.alert("Erro", "Não foi possível apagar a senha.");
-            } finally {
-              setLoadingDeletePassword(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleToggleVisibility = (passwordId) => {
-    if (revealedPasswords[passwordId]) {
-      setRevealedPasswords((prev) => {
-        const newState = { ...prev };
-        delete newState[passwordId];
-        return newState;
-      });
+  const copyToClipboard = (passwordId, serviceName) => {
+    const revealedPassword = revealedPasswords[passwordId];
+    if (revealedPassword) {
+      Clipboard.setString(revealedPassword);
+      Alert.alert("Copiado!", `A senha para "${serviceName}" foi copiada.`);
     } else {
-      setPasswordToRevealId(passwordId);
-      setIsAppPasswordModalVisible(true);
-    }
-  };
-
-  const handleRevealPassword = async () => {
-    if (!appPassword || !passwordToRevealId) {
-      Alert.alert("Erro", "Por favor, insira a senha do aplicativo.");
-      return;
-    }
-    setLoadingReveal(true);
-    try {
-      const response = await axios.get(
-        `https://lockpassapi20250324144759.azurewebsites.net/api/password/${userId}/${passwordToRevealId}/getandreveal`,
-        { params: { AppPassword: appPassword } } //
-      );
-
-      if (response.status === 200 && response.data) {
-        setRevealedPasswords((prev) => ({
-          ...prev,
-          [passwordToRevealId]: response.data, // Assumindo que a API retorna a senha descriptografada como string
-        }));
-        setIsAppPasswordModalVisible(false);
-      } else {
-        Alert.alert("Erro", "Não foi possível revelar a senha.");
-      }
-    } catch (error) {
-      console.error(
-        "Erro ao revelar senha:",
-        error.response?.data || error.message
-      );
-      Alert.alert(
-        "Falha na Descriptografia",
-        "Senha do aplicativo incorreta ou falha na API."
-      );
-    } finally {
-      setAppPassword("");
-      setPasswordToRevealId(null);
-      setLoadingReveal(false);
-    }
-  };
-
-  const handleCopyPassword = async (item) => {
-    const passwordToCopy =
-      revealedPasswords[item.passwordId] || item.encryptedPassword;
-    try {
-      await Clipboard.setStringAsync(passwordToCopy);
-      Alert.alert(
-        "Copiado",
-        `A senha para "${item.serviceName}" foi copiada para a área de transferência.`
-      );
-    } catch (e) {
-      Alert.alert("Erro", "Não foi possível copiar a senha.");
+      Alert.alert("Atenção", "Revele a senha primeiro para poder copiá-la.");
     }
   };
 
   const renderPasswordItem = ({ item }) => {
-    const isPasswordVisible = !!revealedPasswords[item.passwordId];
-    const passwordToShow = isPasswordVisible
-      ? revealedPasswords[item.passwordId]
-      : "••••••••••";
+    const isVisible = visiblePasswords[item.passwordId];
+    const passwordToShow = isVisible ? revealedPasswords[item.passwordId] : "••••••••••";
 
     return (
-      <View style={styles.passwordItemContainer}>
-        <TouchableOpacity
-          style={styles.passwordInfoTouchable}
-          onPress={() => handleCopyPassword(item)}
-        >
-          <Text style={styles.serviceNameText}>
-            Serviço: {item.serviceName}
-          </Text>
-          <Text style={styles.passwordText}>Senha: {passwordToShow}</Text>
-        </TouchableOpacity>
+      <View style={styles.passwordItem}>
+        <View style={styles.passwordInfo}>
+          <Text style={styles.serviceName}>{item.serviceName}</Text>
+          <Text style={styles.passwordText}>{passwordToShow}</Text>
+        </View>
         <View style={styles.passwordActions}>
-          <TouchableOpacity
-            onPress={() => handleToggleVisibility(item.passwordId)}
-            style={styles.actionIcon}
-          >
-            <Feather
-              name={isPasswordVisible ? "eye-off" : "eye"}
-              size={22}
-              color="#2F2F31"
-            />
+          <TouchableOpacity onPress={() => handleInitiateEdit(item)}>
+            <Feather name="edit" size={22} color="#007BFF" />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleOpenEditModal(item)}
-            style={styles.actionIcon}
-          >
-            <Feather name="edit-2" size={20} color="#2F2F31" />
+          <TouchableOpacity style={{ marginHorizontal: 20 }} onPress={() => handleAttemptReveal(item.passwordId)}>
+            <Feather name={isVisible ? "eye-off" : "eye"} size={22} color="#555" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => copyToClipboard(item.passwordId, item.serviceName)}>
+            <Feather name="copy" size={22} color="#14C234" />
           </TouchableOpacity>
         </View>
       </View>
@@ -285,56 +232,57 @@ export default function CategoriaDetalhes({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.categoryTitleText}>Senhas em: {categoryName}</Text>
-      {loadingPasswords ? (
-        <ActivityIndicator size="large" color="#14C234" style={styles.loader} />
+      {loadingData ? (
+        <ActivityIndicator size="large" color="#14C234" style={{flex: 1}}/>
       ) : (
-        <Animated.FlatList
+        <FlatList
           data={passwordsList}
           renderItem={renderPasswordItem}
-          keyExtractor={(item) => item.passwordId.toString()}
-          style={styles.list}
-          contentContainerStyle={{
-            paddingBottom: ADD_BUTTON_CONTAINER_HEIGHT + 10,
-          }}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
+          keyExtractor={(item) => (item.passwordId ? item.passwordId.toString() : Math.random().toString())}
+          ListHeaderComponent={<Text style={styles.headerTitle}>{categoryName}</Text>}
+          contentContainerStyle={{ paddingBottom: 150 }}
           ListEmptyComponent={
-            !loadingPasswords && passwordsList.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.noPasswordsText}>
-                  Nenhuma senha cadastrada nesta categoria.
-                </Text>
-              </View>
-            ) : null
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>Clique no botão '+' para adicionar sua primeira senha.</Text>
+            </View>
           }
         />
       )}
 
-      <Animated.View
-        style={[
-          styles.addCategoryContainer,
-          { transform: [{ translateY: addButtonTranslateY }] },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={handleOpenAddModal}
-          disabled={loadingAddPassword}
-        >
-          <Feather name="plus" size={20} color="white" />
-          <Text style={styles.addButtonText}>Adicionar Senha</Text>
-        </TouchableOpacity>
-      </Animated.View>
+      <TouchableOpacity style={styles.addButton} onPress={() => setIsAddModalVisible(true)}>
+        <Feather name="plus" size={24} color="white" />
+      </TouchableOpacity>
 
+      {/* Modal para REVELAR Senha */}
+      <Modal transparent visible={isRevealModalVisible} animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Autenticação Necessária</Text>
+              <Text style={styles.modalSubtitle}>Digite sua senha principal para revelar.</Text>
+              <TextInput
+                placeholder="Senha do Aplicativo"
+                value={appPassword}
+                onChangeText={setAppPassword}
+                secureTextEntry
+                style={styles.input}
+                editable={!loadingReveal}
+                onSubmitEditing={handleConfirmReveal}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#888" }]} onPress={() => setIsRevealModalVisible(false)} disabled={loadingReveal}>
+                  <Text style={styles.modalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#14C234" }]} onPress={handleConfirmReveal} disabled={loadingReveal}>
+                  {loadingReveal ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalButtonText}>Revelar</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal para ADICIONAR Senha */}
       <Modal transparent visible={isAddModalVisible} animationType="fade">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Adicionar Nova Senha</Text>
             <TextInput
@@ -342,141 +290,75 @@ export default function CategoriaDetalhes({ route }) {
               value={addServiceName}
               onChangeText={setAddServiceName}
               style={styles.input}
-              editable={!loadingAddPassword}
             />
             <TextInput
               placeholder="Senha"
-              value={addPassword}
-              onChangeText={setAddPassword}
+              value={addPasswordValue}
+              onChangeText={setAddPasswordValue}
               style={styles.input}
               secureTextEntry
-              editable={!loadingAddPassword}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#888" }]}
-                onPress={() => setIsAddModalVisible(false)}
-                disabled={loadingAddPassword}
-              >
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#888" }]} onPress={() => setIsAddModalVisible(false)}>
                 <Text style={styles.modalButtonText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#14C234" }]}
-                onPress={handleSaveNewPassword}
-                disabled={loadingAddPassword}
-              >
-                <Text style={styles.modalButtonText}>
-                  {loadingAddPassword ? "Salvando..." : "Salvar"}
-                </Text>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#14C234" }]} onPress={handleSaveNewPassword} disabled={loadingAddPassword}>
+                {loadingAddPassword ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalButtonText}>Salvar</Text>}
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
 
-      {isEditModalVisible && editingPasswordData && (
-        <Modal transparent visible={isEditModalVisible} animationType="fade">
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={styles.modalOverlay}
-          >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Editar Senha</Text>
-              <TextInput
-                placeholder="Nome do serviço"
-                value={editServiceName}
-                onChangeText={setEditServiceName}
-                style={styles.input}
-                editable={!loadingUpdatePassword && !loadingDeletePassword}
-              />
-              <TextInput
-                placeholder="Nova Senha"
-                value={editPassword}
-                onChangeText={setEditPassword}
-                style={styles.input}
-                secureTextEntry
-                editable={!loadingUpdatePassword && !loadingDeletePassword}
-              />
-              <Text style={styles.categoryInfoText}>
-                Categoria: {categoryName}
-              </Text>
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: "#888" }]}
-                  onPress={() => {
-                    setIsEditModalVisible(false);
-                    setEditingPasswordData(null);
-                  }}
-                  disabled={loadingUpdatePassword || loadingDeletePassword}
-                >
-                  <Text style={styles.modalButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, { backgroundColor: "#14C234" }]}
-                  onPress={handleUpdatePassword}
-                  disabled={loadingUpdatePassword || loadingDeletePassword}
-                >
-                  {loadingUpdatePassword ? (
-                    <ActivityIndicator size="small" color="#fff" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>Salvar</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButton]}
-                onPress={handleDeletePassword}
-                disabled={loadingDeletePassword || loadingUpdatePassword}
-              >
-                {loadingDeletePassword ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>Apagar Senha</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-      )}
-
-      <Modal
-        transparent
-        visible={isAppPasswordModalVisible}
-        animationType="fade"
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
+      {/* Modal de AUTENTICAÇÃO para Edição */}
+      <Modal transparent visible={isEditAuthModalVisible} animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Confirmar Identidade</Text>
+            <Text style={styles.modalTitle}>Autorizar Edição</Text>
+            <Text style={styles.modalSubtitle}>Digite sua senha principal para continuar.</Text>
             <TextInput
-              placeholder="Senha do Aplicativo"
-              value={appPassword}
-              onChangeText={setAppPassword}
+              placeholder="Sua Senha Principal"
+              value={editAppPassword}
+              onChangeText={setEditAppPassword}
               style={styles.input}
               secureTextEntry
-              editable={!loadingReveal}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#888" }]}
-                onPress={() => setIsAppPasswordModalVisible(false)}
-                disabled={loadingReveal}
-              >
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#888" }]} onPress={() => setIsEditAuthModalVisible(false)}>
                 <Text style={styles.modalButtonText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#14C234" }]}
-                onPress={handleRevealPassword}
-                disabled={loadingReveal}
-              >
-                {loadingReveal ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>Revelar</Text>
-                )}
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#14C234" }]} onPress={handleConfirmEditAuth} disabled={loadingEdit}>
+                {loadingEdit ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalButtonText}>Autorizar</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal para EDITAR Senha */}
+      <Modal transparent visible={isEditModalVisible} animationType="fade">
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Editar Senha</Text>
+            <TextInput
+              placeholder="Nome do serviço"
+              value={editServiceName}
+              onChangeText={setEditServiceName}
+              style={styles.input}
+            />
+            <TextInput
+              placeholder="Nova Senha"
+              value={editPasswordValue}
+              onChangeText={setEditPasswordValue}
+              style={styles.input}
+              secureTextEntry
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#888" }]} onPress={() => setIsEditModalVisible(false)}>
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: "#14C234" }]} onPress={handleSaveChanges} disabled={loadingEdit}>
+                {loadingEdit ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.modalButtonText}>Salvar Alterações</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -487,180 +369,125 @@ export default function CategoriaDetalhes({ route }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  categoryTitleText: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 10,
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#333",
-    textAlign: "center",
-    backgroundColor: "#fff",
-  },
-  loader: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  list: {
-    flex: 1,
-    paddingHorizontal: 15,
-  },
-  passwordItemContainer: {
-    backgroundColor: "#f0f0f0",
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  passwordInfoTouchable: {
-    flex: 1,
-    marginRight: 10,
-  },
-  serviceNameText: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#2F2F31",
-    marginBottom: 5,
-  },
-  passwordText: {
-    fontSize: 15,
-    color: "#555",
-    fontFamily: "Fonte-Regular",
-  },
-  passwordActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  actionIcon: {
-    padding: 5,
-    marginLeft: 10,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  noPasswordsText: {
-    fontSize: 16,
-    color: "#777",
-    textAlign: "center",
-  },
-  addCategoryContainer: {
-    position: "absolute",
-    width: "100%",
-    height: 150,
-    backgroundColor: "#2d2d2d",
-    paddingVertical: 15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  addButton: {
-    flexDirection: "row",
-    backgroundColor: "#464646",
-    paddingVertical: 20,
-    paddingHorizontal: 30,
-    borderRadius: 30,
-    alignItems: "center",
-    gap: 10,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    padding: 25,
-    borderRadius: 15,
-    width: "100%",
-    maxWidth: 400,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#333",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 18,
-    fontSize: 16,
-    backgroundColor: "#f9f9f9",
-    color: "#000000",
-  },
-  categoryInfoText: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 10,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    marginHorizontal: 5,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 2,
-    minHeight: 48,
-  },
-  deleteButton: {
-    backgroundColor: "#d9534f",
-    marginTop: 15,
-    width: "100%",
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 50,
-    elevation: 2,
-    marginHorizontal: 0,
-  },
-  modalButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-});
+    container: {
+      flex: 1,
+      backgroundColor: '#fff',
+    },
+    headerTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginHorizontal: 20,
+      marginTop: 20,
+      marginBottom: 15,
+      textAlign: 'center'
+    },
+    emptyContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 40,
+      marginTop: 50,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+    },
+    passwordItem: {
+      backgroundColor: '#f9f9f9',
+      borderRadius: 12,
+      padding: 18,
+      marginHorizontal: 20,
+      marginBottom: 12,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      elevation: 2,
+    },
+    passwordInfo: {
+      flex: 1,
+      marginRight: 10,
+    },
+    serviceName: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    passwordText: {
+      fontSize: 16,
+      color: '#555',
+      marginTop: 4,
+    },
+    passwordActions: {
+        flexDirection: 'row',
+        alignItems: 'center'
+    },
+    addButton: {
+      position: 'absolute',
+      bottom: 30,
+      right: 30,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: "#14C234",
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 8,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20,
+    },
+    modalContent: {
+      backgroundColor: "#fff",
+      padding: 25,
+      borderRadius: 15,
+      width: "100%",
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginBottom: 10,
+      textAlign: 'center'
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: "#ccc",
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 15,
+      fontSize: 16,
+    },
+    authInput: {
+      borderColor: '#14C234',
+      marginTop: 5,
+    },
+    modalButtons: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+    },
+    modalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      marginHorizontal: 5,
+      alignItems: "center",
+      justifyContent: 'center',
+      minHeight: 48,
+    },
+    modalButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+    },
+  });
