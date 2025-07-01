@@ -395,7 +395,7 @@ export default function CategoriaDetalhes({ route, navigation }) {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Adicionar Nova Senha</Text>
             <TextInput
-              placeholder="Nome do serviço"
+              placeholder="Login"
               value={addServiceName}
               onChangeText={setAddServiceName}
               style={styles.input}

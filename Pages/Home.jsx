@@ -17,8 +17,10 @@ import {
 } from "react-native";
 import Feather from "react-native-vector-icons/Feather";
 import axios from "axios";
+import { SvgUri } from "react-native-svg"; // 1. Importar SvgUri em vez de SvgXml
 
 export default function Home({ route, navigation }) {
+  // ... (o resto dos seus estados e hooks permanecem iguais) ...
   const user = route.params?.user;
   const userId = user?.userId;
 
@@ -108,7 +110,7 @@ export default function Home({ route, navigation }) {
   }, [userId]);
 
   const handleOpenAddCategoryModal = () => {
-    if (iconOptions.length > 0) {
+    if (iconOptions.length > 0 && !selectedIconUrl) {
       setSelectedIconUrl(iconOptions[0]);
     }
     setIsAddCategoryModalVisible(true);
@@ -144,7 +146,6 @@ export default function Home({ route, navigation }) {
         "Erro",
         "Não foi possível conectar à API ao adicionar categoria."
       );
-      console.error("Erro handleSubmitNewCategory:", error);
     } finally {
       setLoadingAddCategory(false);
     }
@@ -175,7 +176,6 @@ export default function Home({ route, navigation }) {
               }
             } catch (error) {
               Alert.alert("Erro", "Erro de conexão ao excluir categoria.");
-              console.error("Erro handleDeleteCategory:", error);
             }
           },
         },
@@ -216,51 +216,64 @@ export default function Home({ route, navigation }) {
         setSelectedCategoryForMenu(null);
         fetchCategories();
       } else {
-        Alert.alert(
-          "Erro",
-          "Não foi possível atualizar o nome (resposta da API)."
-        );
+        Alert.alert("Erro", "Não foi possível atualizar o nome.");
       }
     } catch (error) {
-      console.error(
-        "Erro ao atualizar nome da categoria:",
-        error.response?.data || error.message
-      );
-      Alert.alert(
-        "Erro",
-        "Não foi possível atualizar o nome da categoria (conexão/erro)."
-      );
+      Alert.alert("Erro", "Não foi possível atualizar o nome da categoria.");
     } finally {
       setLoadingUpdateCategory(false);
     }
   };
+  
+  // 2. Lógica de renderização corrigida
+  const renderCategoryCard = ({ item }) => {
+    const isSvg = item.iconUrl && item.iconUrl.toLowerCase().endsWith('.svg');
 
-  const renderCategoryCard = ({ item }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() =>
-        navigation.navigate("CategoriaDetalhes", {
-          categoryName: item.categoryName,
-          categoryId: item.categoryId,
-          userId: userId,
-        })
-      }
-      onLongPress={() => handleLongPressCategory(item)}
-    >
-      {item.iconUrl &&
-      (item.iconUrl.startsWith("http") || item.iconUrl.startsWith("https")) ? (
-        <Image source={{ uri: item.iconUrl }} style={styles.cardIconImage} />
-      ) : (
-        <Feather name={"folder"} size={30} color="#555" />
-      )}
-      <View style={styles.footer}>
-        <Text style={styles.texto} numberOfLines={2} ellipsizeMode="tail">
-          {item.categoryName}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() =>
+          navigation.navigate("CategoriaDetalhes", {
+            categoryName: item.categoryName,
+            categoryId: item.categoryId,
+            userId: userId,
+          })
+        }
+        onLongPress={() => handleLongPressCategory(item)}
+      >
+        {isSvg ? (
+          <SvgUri width="40" height="40" uri={item.iconUrl} />
+        ) : (
+          <Image source={{ uri: item.iconUrl }} style={styles.cardIconImage} />
+        )}
+        <View style={styles.footer}>
+          <Text style={styles.texto} numberOfLines={2} ellipsizeMode="tail">
+            {item.categoryName}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
+  const renderIconOption = ({ item }) => {
+    const isSvg = item && item.toLowerCase().endsWith('.svg');
+    return (
+      <TouchableOpacity
+        style={[
+          styles.iconWrapper,
+          selectedIconUrl === item && styles.iconWrapperSelected,
+        ]}
+        onPress={() => setSelectedIconUrl(item)}
+      >
+        {isSvg ? (
+          <SvgUri width="32" height="32" uri={item} />
+        ) : (
+          <Image source={{ uri: item }} style={styles.iconImage} />
+        )}
+      </TouchableOpacity>
+    );
+  };
+  
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#fff" }}
@@ -342,24 +355,14 @@ export default function Home({ route, navigation }) {
               {loadingIcons ? (
                 <ActivityIndicator color="#14C234" />
               ) : (
-                <View style={styles.iconSelectorContainer}>
-                  {iconOptions.map((iconUrl) => (
-                    <TouchableOpacity
-                      key={iconUrl}
-                      style={[
-                        styles.iconWrapper,
-                        selectedIconUrl === iconUrl &&
-                          styles.iconWrapperSelected,
-                      ]}
-                      onPress={() => setSelectedIconUrl(iconUrl)}
-                    >
-                      <Image
-                        source={{ uri: iconUrl }}
-                        style={styles.iconImage}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                // 3. Usando FlatList com numColumns para o grid de ícones
+                <FlatList
+                  data={iconOptions}
+                  renderItem={renderIconOption}
+                  keyExtractor={(item, index) => index.toString()}
+                  numColumns={5} // Ajuste o número de colunas como preferir
+                  style={styles.iconScrollView}
+                />
               )}
 
               <View style={styles.modalButtonsRow}>
@@ -508,236 +511,237 @@ export default function Home({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  listStyle: {
-    flex: 1,
-  },
-  listContentContainer: {
-    paddingHorizontal: 10,
-    paddingBottom: 150,
-  },
-  header: {
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    alignItems: "flex-start",
-    width: "100%",
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#333",
-  },
-  card: {
-    flex: 1,
-    margin: 8,
-    height: 150,
-    borderRadius: 15,
-    backgroundColor: "#D8D8D8",
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
-    minWidth: "40%",
-  },
-  cardIconImage: {
-    width: 40,
-    height: 40,
-    resizeMode: "contain",
-    marginBottom: 10,
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    backgroundColor: "rgba(185, 185, 185, 0.8)",
-    paddingVertical: 8,
-    paddingHorizontal: 5,
-    alignItems: "center",
-    borderBottomLeftRadius: 15,
-    borderBottomRightRadius: 15,
-  },
-  texto: {
-    fontSize: 14,
-    color: "#464646",
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  emptyListContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 50,
-    minHeight: 200,
-  },
-  emptyListText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  addCategoryContainer: {
-    position: "absolute",
-    width: "100%",
-    height: 120,
-    backgroundColor: "#2d2d2d",
-    paddingVertical: 15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  addButton: {
-    flexDirection: "row",
-    backgroundColor: "#14C234",
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
-    alignItems: "center",
-    gap: 10,
-  },
-  addButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  modalView: {
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 25,
-    width: "100%",
-    maxWidth: 380,
-    alignItems: "stretch",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#333",
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 15,
-    fontSize: 16,
-    backgroundColor: "#f9f9f9",
-    color: "#000",
-  },
-  iconSelectorTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  iconSelectorContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  iconWrapper: {
-    margin: 5,
-    padding: 10,
-    borderRadius: 40,
-    borderWidth: 2,
-    borderColor: "#ddd",
-  },
-  iconWrapperSelected: {
-    borderColor: "#14C234",
-    backgroundColor: "#e8f5e9",
-  },
-  iconImage: {
-    width: 32,
-    height: 32,
-    resizeMode: "contain",
-  },
-  modalButtonsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  modalButtonAction: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 5,
-    minHeight: 48,
-  },
-  modalButtonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  menuOptionContainer: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    paddingVertical: 0,
-    width: "90%",
-    maxWidth: 320,
-    elevation: 5,
-    overflow: "hidden",
-  },
-  menuOptionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    paddingHorizontal: 15,
-    paddingTop: 15,
-    paddingBottom: 15,
-    textAlign: "center",
-    color: "#333",
-  },
-  menuOptionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-    paddingHorizontal: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  menuOptionItemText: {
-    fontSize: 16,
-    marginLeft: 15,
-    color: "#333",
-  },
-  menuOptionCancel: {},
-  currentCategoryNameText: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 15,
-    textAlign: "center",
-  },
+    container: {
+      flex: 1,
+      backgroundColor: "#fff",
+    },
+    loaderContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    listStyle: {
+      flex: 1,
+    },
+    listContentContainer: {
+      paddingHorizontal: 10,
+      paddingBottom: 150,
+    },
+    header: {
+      paddingVertical: 15,
+      paddingHorizontal: 10,
+      alignItems: "flex-start",
+      width: "100%",
+    },
+    title: {
+      fontSize: 22,
+      fontWeight: "bold",
+      color: "#333",
+    },
+    card: {
+      flex: 1,
+      margin: 8,
+      height: 150,
+      borderRadius: 15,
+      backgroundColor: "#f0f0f0",
+      alignItems: "center",
+      justifyContent: "center",
+      elevation: 3,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.22,
+      shadowRadius: 2.22,
+      minWidth: "40%",
+    },
+    cardIconImage: {
+      width: 40,
+      height: 40,
+      resizeMode: "contain",
+      marginBottom: 10,
+    },
+    footer: {
+      position: "absolute",
+      bottom: 0,
+      width: "100%",
+      backgroundColor: "rgba(224, 224, 224, 0.8)",
+      paddingVertical: 8,
+      paddingHorizontal: 5,
+      alignItems: "center",
+      borderBottomLeftRadius: 15,
+      borderBottomRightRadius: 15,
+    },
+    texto: {
+      fontSize: 14,
+      color: "#333",
+      fontWeight: "bold",
+      textAlign: "center",
+    },
+    emptyListContainer: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      marginTop: 50,
+      minHeight: 200,
+    },
+    emptyListText: {
+      fontSize: 16,
+      color: "#666",
+    },
+    addCategoryContainer: {
+      position: "absolute",
+      width: "100%",
+      height: 120,
+      backgroundColor: "#2d2d2d",
+      paddingVertical: 15,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      elevation: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -3 },
+      shadowOpacity: 0.15,
+      shadowRadius: 3,
+    },
+    addButton: {
+      flexDirection: "row",
+      backgroundColor: "#14C234",
+      paddingVertical: 15,
+      paddingHorizontal: 25,
+      borderRadius: 25,
+      alignItems: "center",
+      gap: 10,
+    },
+    addButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: 16,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20,
+    },
+    modalView: {
+      backgroundColor: "#fff",
+      borderRadius: 15,
+      padding: 25,
+      width: "100%",
+      maxWidth: 380,
+      alignItems: "stretch",
+      elevation: 5,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: "bold",
+      marginBottom: 20,
+      textAlign: "center",
+      color: "#333",
+    },
+    modalInput: {
+      borderWidth: 1,
+      borderColor: "#ddd",
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 15,
+      fontSize: 16,
+      backgroundColor: "#f9f9f9",
+      color: "#000",
+    },
+    iconSelectorTitle: {
+      fontSize: 16,
+      fontWeight: "600",
+      color: "#333",
+      marginBottom: 10,
+      textAlign: "center",
+    },
+    iconScrollView: {
+      maxHeight: 200, 
+    },
+    iconWrapper: {
+      margin: 5,
+      padding: 8,
+      borderRadius: 40,
+      borderWidth: 2,
+      borderColor: "transparent",
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 50, // Tamanho fixo para cada item do grid
+      height: 50,
+    },
+    iconWrapperSelected: {
+      borderColor: "#14C234",
+      backgroundColor: "#e8f5e9",
+    },
+    iconImage: {
+      width: 32,
+      height: 32,
+      resizeMode: "contain",
+    },
+    modalButtonsRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginTop: 10,
+    },
+    modalButtonAction: {
+      flex: 1,
+      paddingVertical: 14,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      marginHorizontal: 5,
+      minHeight: 48,
+    },
+    modalButtonText: {
+      color: "#fff",
+      fontWeight: "bold",
+      fontSize: 16,
+    },
+    menuOptionContainer: {
+      backgroundColor: "white",
+      borderRadius: 10,
+      paddingVertical: 0,
+      width: "90%",
+      maxWidth: 320,
+      elevation: 5,
+      overflow: "hidden",
+    },
+    menuOptionTitle: {
+      fontSize: 18,
+      fontWeight: "bold",
+      paddingHorizontal: 15,
+      paddingTop: 15,
+      paddingBottom: 15,
+      textAlign: "center",
+      color: "#333",
+    },
+    menuOptionItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 15,
+      paddingHorizontal: 20,
+      borderTopWidth: 1,
+      borderTopColor: "#eee",
+    },
+    menuOptionItemText: {
+      fontSize: 16,
+      marginLeft: 15,
+      color: "#333",
+    },
+    menuOptionCancel: {},
+    currentCategoryNameText: {
+      fontSize: 14,
+      color: "#555",
+      marginBottom: 15,
+      textAlign: "center",
+    },
 });
